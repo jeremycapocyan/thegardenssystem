@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getBackend } from "@/lib/backend";
 import { CourtMark } from "@/components/finance-app";
+import { DEMO_SESSION } from "@/components/workspace-provider";
 
 export default function AccountPage() {
   const [status, setStatus] = useState<
@@ -12,6 +12,8 @@ export default function AccountPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   useEffect(() => {
+    // Invitations and recovery links always belong to the shared account.
+    sessionStorage.removeItem(DEMO_SESSION);
     let active = true;
     const api = getBackend();
     if (!api) {
@@ -70,9 +72,9 @@ export default function AccountPage() {
               account. Open the latest invitation or request a new password
               recovery link from sign in.
             </p>
-            <Link className="button primary" href="/">
+            <a className="button primary" href="/">
               Go to sign in
-            </Link>
+            </a>
           </>
         )}
         {status === "ready" && (
@@ -114,9 +116,10 @@ export default function AccountPage() {
         {status === "saved" && (
           <>
             <p>You can now use your email and password to sign in.</p>
-            <Link className="button primary" href="/">
+            {/* Reload the provider to establish the authenticated shared session. */}
+            <a className="button primary" href="/">
               Open workspace
-            </Link>
+            </a>
           </>
         )}
       </section>

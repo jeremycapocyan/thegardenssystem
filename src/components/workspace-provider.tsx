@@ -61,7 +61,7 @@ interface Workspace {
 }
 const Context = createContext<Workspace | null>(null);
 const DEMO_STORE = "gardens.sample.v1";
-const DEMO_SESSION = "gardens.sample.active";
+export const DEMO_SESSION = "gardens.sample.active";
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode>("loading");
   const [data, setData] = useState<Dataset>(EMPTY_DATA);
