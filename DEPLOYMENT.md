@@ -54,7 +54,7 @@ Connect the Vercel project to `jeremycapocyan/thegardenssystem`, with root direc
 
 - Framework: Next.js
 - Install: `npm ci`
-- Build: `npm run build`
+- Build: `npm test && npm run build` (Vercel also runs the isolated test suite before publishing)
 - Output: leave the Vercel override unset; its Next.js adapter handles prerendered pages and server endpoints in `.next`.
 - Production branch: `main`
 - Node: 24.x (pinned in `package.json`)
