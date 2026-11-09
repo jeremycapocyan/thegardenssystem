@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 import "./globals.css";
+import "./team.css";
 
 export const metadata: Metadata = {
   title: {

@@ -20,7 +20,7 @@ npm run build
 npm start
 ```
 
-`npm start` serves the production export at `http://127.0.0.1:3000`. Deployment instructions are in [DEPLOYMENT.md](DEPLOYMENT.md).
+`npm start` runs the production Next.js server at `http://127.0.0.1:3000`. Deployment instructions are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Daily operation
 
@@ -47,6 +47,22 @@ npm start
 Supabase provides authentication and PostgreSQL. Only explicitly provisioned members can read business data. Jeremy is an admin; Genesis and Ken are viewers. Row-level security enforces these permissions in the database, independently of buttons in the browser. Admin changes generate a server-written audit history. Never put a service-role key or database password into a `NEXT_PUBLIC_` variable.
 
 The migration seeds categories only. Live transaction logs begin empty. There is no automatic Excel import or opening balance; the sample records are separate.
+
+## Employees, attendance, and payroll
+
+Open **Employees & payroll** from Jeremy's finance sidebar, or visit `/team/`.
+
+1. **Employees:** add each person's name, email, employment start, schedule effective date, and recurring workdays. Unchecked days are rest days. Save, then choose **Invite / resend**. The employee uses the email link to set their own password. An invited employee automatically opens `/employee/` after sign-in and cannot access finance or another person's records.
+2. **Court QR & settings:** print or download the court QR and display it at the court. Replacing it invalidates the previous printout. Employees scan it with their phone's Camera app, or with **Scan court QR** inside their portal. Scanning opens an action menu; only selecting **Time In** or **Time Out** records attendance. Requests do not create punches. An internet connection is required; device time is never used for live punches. A printed QR is an identifier, not location verification.
+3. **Attendance:** choose an employee and payroll period. Correct missing punches with a reason, void accidental attendance, and add dated workday/rest-day overrides. Changes have an audit trail. An open shift cannot be finalized. Review extra time after 11:30 PM; approve all, approve a smaller amount, or approve zero to reject it.
+4. **Requests & advances:** approve or reject leave, sick leave, and salary advances. Approving leave requires an explicit paid/unpaid choice. A leave range pays only scheduled workdays. After an advance is approved, **Release cash** records the amount actually paid; approval itself creates no expense.
+5. **Payroll:** the periods are 1st–15th and 16th–month-end. Resolve the listed blockers, then finalize each employee's statement. Finalization freezes attendance/rates and recovers outstanding released advances oldest first, capped at earned pay. Excess advance balances carry forward. Record actual salary payments, including partial payments; the unpaid balance stays visible. Finalized statements are locked, so review all corrections before finalizing. Payslips can be exported as CSV.
+
+The standard shift is **3:30–11:30 PM, ₱650**, with an hourly calculation rate of **₱81.25**. Regular pay is ₱650 less the rounded deduction for scheduled time missed, capped at zero. Approved overtime uses actual time after the scheduled finish. Early arrival earns no extra pay. Deductions and overtime are rounded separately to centavos per shift. Paid leave earns the scheduled ₱650; unpaid leave and absences earn zero. Eight hours plus one approved overtime hour earns **₱731.25**. The shift includes all eight hours without a separate unpaid break deduction.
+
+Every actual advance release or salary payment creates exactly one protected **Wages** expense. Advance recovery creates no expense. Finance records use actual payment dates, independently of the period when salary was earned. For example, ₱1,000 advanced and ₱5,500 paid later equals ₱6,500 cash expenses in total. These are manual cash-payment records, not bank transfers. The agreed tracker does not calculate statutory contributions, other pay premiums, or leave quotas.
+
+Genesis and Ken retain finance reports, including cash wage expenses, but cannot read employee requests, personal attendance, or payroll statements. Deactivated employees retain their own history and cannot submit requests or punches.
 
 ## Verification
 

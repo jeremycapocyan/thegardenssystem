@@ -234,7 +234,7 @@ function Stat({
   );
 }
 
-function Login() {
+export function Login() {
   const ws = useWorkspace();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -508,6 +508,16 @@ function DeleteDialog({
   );
 }
 
+function EmployeeRedirect() {
+  useEffect(() => {
+    window.location.replace("/employee/");
+  }, []);
+  return (
+    <main className="loading-screen">
+      <p>Opening your employee portal…</p>
+    </main>
+  );
+}
 export function FinanceApp({ view }: { view: View }) {
   const ws = useWorkspace();
   const { period, setPeriod, reference, setReference, asOf, setAsOf } = ws;
@@ -639,11 +649,13 @@ export function FinanceApp({ view }: { view: View }) {
   }
   const actions = (
     kind: Collection | "bills",
-    record: { id: string },
+    record: { id: string; staff_payment_id?: string | null },
     label: string,
     term?: Editor["term"],
   ) =>
-    admin ? (
+    record.staff_payment_id ? (
+      <span className="badge neutral">Payroll linked</span>
+    ) : admin ? (
       <div className="row-actions">
         <button
           className="icon-button"
@@ -820,6 +832,7 @@ export function FinanceApp({ view }: { view: View }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   if (ws.mode !== "live" && ws.mode !== "demo") return <Login />;
+  if (ws.profile?.role === "employee") return <EmployeeRedirect />;
   return (
     <div className="app-shell">
       {menuOpen && (
@@ -854,6 +867,12 @@ export function FinanceApp({ view }: { view: View }) {
               </Link>
             );
           })}
+          {admin && (
+            <Link className="nav-item" href="/team/">
+              <Users size={19} />
+              Employees & payroll
+            </Link>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="split-note">

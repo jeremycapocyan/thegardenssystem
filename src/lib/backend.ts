@@ -1,5 +1,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Collection, Dataset, Profile } from "./types";
+import {
+  EMPTY_DATA,
+  type Collection,
+  type Dataset,
+  type Profile,
+} from "./types";
 
 let client: SupabaseClient | null = null;
 export function getBackend(): SupabaseClient | null {
@@ -35,6 +40,8 @@ export async function loadWorkspace(): Promise<{
     throw new Error(
       "Your account does not have access to The Gardens workspace. Ask Jeremy to add your account.",
     );
+  if (profile.role === "employee")
+    return { profile: profile as Profile, data: EMPTY_DATA };
   const { data, error } = await api.rpc("garden_snapshot");
   if (error)
     throw new Error(

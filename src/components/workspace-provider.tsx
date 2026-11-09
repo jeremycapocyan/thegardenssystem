@@ -25,6 +25,7 @@ import {
   type Dataset,
   type Profile,
   type Period,
+  type Role,
 } from "@/lib/types";
 
 type Mode =
@@ -47,7 +48,7 @@ interface Workspace {
   signOut: () => Promise<void>;
   enterDemo: () => void;
   resetDemo: () => void;
-  previewRole: (role: "admin" | "viewer") => void;
+  previewRole: (role: Role) => void;
   save: (
     collection: Collection,
     values: Record<string, unknown>,
@@ -252,12 +253,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     resetDemo() {
       if (mode !== "demo") return;
       commitDemo(demoData());
+      localStorage.removeItem("gardens.team.sample.v1");
+      window.dispatchEvent(new Event("gardens-demo-reset"));
     },
     previewRole(role) {
       if (mode === "demo")
         setProfile({
           id: `sample-${role}`,
-          display_name: role === "admin" ? "Jeremy" : "Genesis",
+          display_name:
+            role === "admin"
+              ? "Jeremy"
+              : role === "employee"
+                ? "Alex Reyes"
+                : "Genesis",
           role,
         });
     },

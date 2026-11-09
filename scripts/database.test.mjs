@@ -14,14 +14,11 @@ test("PostgreSQL migration, permissions, and record invariants", async (t) => {
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
     grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;
     insert into auth.users values('${admin}'),('${viewer}'),('${outsider}');`);
-  const migration = await fs.readFile(
-    new URL(
-      "../supabase/migrations/202611090001_gardens_finance.sql",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  await db.exec(migration);
+  const folder = new URL("../supabase/migrations/", import.meta.url);
+  for (const name of (await fs.readdir(folder))
+    .filter((name) => name.endsWith(".sql"))
+    .sort())
+    await db.exec(await fs.readFile(new URL(name, folder), "utf8"));
   await db.query(
     "insert into public.garden_profiles(id,display_name,role) values($1,$2,$3),($4,$5,$6)",
     [admin, "Jeremy", "admin", viewer, "Genesis", "viewer"],

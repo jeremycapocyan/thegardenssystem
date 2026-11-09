@@ -1,4 +1,4 @@
-export type Role = "admin" | "viewer";
+export type Role = "admin" | "viewer" | "employee";
 export type Owner = "Genesis" | "Ken" | "Jeremy";
 export type Period = "daily" | "weekly" | "monthly";
 export type View =
@@ -31,6 +31,7 @@ export interface Income {
   created_at?: string;
 }
 export interface Expense {
+  staff_payment_id?: string | null;
   id: string;
   paid_on: string;
   category_id: string;

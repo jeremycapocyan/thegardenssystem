@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
-    "start": "node scripts/serve.mjs",
+    "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/finance.test.ts scripts/database.test.mjs",
+    "test": "tsx --test src/lib/finance.test.ts src/lib/team.test.ts scripts/database.test.mjs scripts/payroll.test.mjs scripts/qr.test.mjs",
     "database:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "format": "prettier --write src scripts"
   },
@@ -17,17 +17,23 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
+    "@zxing/browser": "^0.2.1",
     "lucide-react": "^1.70.0",
     "next": "^16.4.5",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.15",
     "@types/node": "^26.6.6",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@zxing/library": "^0.23.0",
     "pg": "^8.23.1",
+    "pngjs": "^7.0.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

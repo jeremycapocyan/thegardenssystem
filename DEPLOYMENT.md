@@ -12,9 +12,7 @@ npm run database:migrate
 
 The runner verifies the TLS certificate and hostname, applies migrations atomically, and checks stored migration checksums on subsequent runs. Never modify an applied migration; add another SQL file. Database credentials stay in the ignored environment file and are not needed by the frontend build.
 
-Alternatively, on a fresh project only, use its SQL Editor to run the complete file:
-
-`supabase/migrations/202611090001_gardens_finance.sql`
+Alternatively, on a fresh project only, use its SQL Editor to run all files under `supabase/migrations/` in filename order.
 
 Use one initialization method; a manual SQL Editor installation does not create the local runner's migration history. The schema creates tables, indexes, functions, row-level policies, audit triggers, starter categories, and realtime publication entries where supported.
 
@@ -42,7 +40,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
 ```
 
-These public values identify the project; database policies provide authorization. A legacy anon key also works in the publishable-key variable. Never use the secret/service-role key here.
+These public values identify the project; database policies provide authorization. A legacy anon key also works in the publishable-key variable. Never use the secret/service-role key in either public variable.
+
+Employee invitation requests use `POST /api/team/invite/`. Configure `SUPABASE_SERVICE_ROLE_KEY` as a **server-only** environment variable in local development and Vercel. The route verifies the caller with Supabase Auth and checks their database admin role before inviting or linking an employee. A key named `SUPABASE_SECRET_KEY` is accepted as a server-only alternative. The Supabase/Vercel integration already supplies these private values for the connected deployment. Do not copy them into browser code or Git.
+
+Invitations use the canonical `APP_URL`, defaulting to `https://thegardenssystem.vercel.app`, so an invitation sent from a preview does not lead to an unapproved preview callback. Set `APP_URL` and the corresponding Supabase `/account/` redirect allowlist together when using a different domain.
 
 In Vercel, add these same variables to the project for the intended environments and redeploy. `NEXT_PUBLIC_` values are included at build time, so changing settings without rebuilding does not update an existing deployment. The Supabase marketplace integration may create `NEXT_PUBLIC_SUPABASE_ANON_KEY`; map that public value to the name used above if needed. Keep server-only credentials private.
 
@@ -53,16 +55,18 @@ Connect the Vercel project to `jeremycapocyan/thegardenssystem`, with root direc
 - Framework: Next.js
 - Install: `npm ci`
 - Build: `npm run build`
-- Output: leave the Vercel override unset; its Next.js adapter handles the static export. The local exported files are in `out`.
+- Output: leave the Vercel override unset; its Next.js adapter handles prerendered pages and server endpoints in `.next`.
 - Production branch: `main`
 - Node: 24.x (pinned in `package.json`)
 
-The app exports static routes and uses Supabase directly with RLS. It has no external spreadsheet connection or server secret in the frontend. If Supabase variables are missing, shared login is disabled and the isolated demo remains available.
+The app uses the Next.js runtime for authenticated employee invitations and Supabase transactions/RLS for business records. It has no external spreadsheet connection or server secret in the frontend. If public Supabase variables are missing, shared login is disabled and the isolated demo remains available.
 
 ## 5. Acceptance check
 
-1. Sign in as Jeremy and confirm live logs are empty apart from starter categories.
+1. Sign in as Jeremy and confirm existing finance records are preserved. A fresh installation contains starter categories and court QR configuration, with no sample transactions or employees.
 2. Add a daily income row and a bill payment. Confirm the dashboard counts the payment once and the bill tracker reflects the selected due month.
 3. Sign in as an approved viewer and confirm reports are visible and editing is unavailable. Database policy tests also exercise direct rejected writes.
 4. Confirm password invitation redirects use the production URL, and test a second device for shared data synchronization.
 5. Keep the demo separate from real records. Establish database backups using Supabase's available backup/export facilities; CSV report exports are not a complete restore source.
+6. Register a real employee only when their details are supplied. Invite them through **Employees**, print the court QR, and verify their own-account attendance menu on a phone. Allow camera permission when using the portal scanner; the phone's Camera app can also open the printed QR URL. Confirm that account links return to `/account/` before the employee opens their portal.
+7. Apply employee migrations before deploying the employee UI. The migration narrows old finance membership policies before enabling employee roles. Existing finance tests run against every migration, and additional tests cover private HR access, payroll rounding, advance allocations, idempotent cash posting, and QR decoding. Production smoke checks must not insert fictional attendance or salary payments.
