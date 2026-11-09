@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import { money, type trend } from "@/lib/finance";
 
 export function CashFlowChart({
@@ -6,8 +7,19 @@ export function CashFlowChart({
 }: {
   points: ReturnType<typeof trend>;
 }) {
-  const width = 800,
-    height = 275,
+  const container = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(800);
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const measure = () =>
+      setWidth(Math.max(280, Math.round(element.clientWidth)));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const height = 275,
     left = 64,
     right = 18,
     top = 20,
@@ -20,6 +32,7 @@ export function CashFlowChart({
   const y = (value: number) =>
     top + ((max - value) / (max - min)) * (height - top - bottom);
   const step = (width - left - right) / points.length;
+  const labelStride = Math.ceil(56 / step);
   const zero = y(0);
   const barWidth = Math.min(17, step * 0.27);
   const hasData = points.some((p) => p.income || p.expense);
@@ -27,7 +40,7 @@ export function CashFlowChart({
     .map((p, i) => `${left + step * (i + 0.5)},${y(p.net)}`)
     .join(" ");
   return (
-    <div className="cash-chart">
+    <div className="cash-chart" ref={container}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
@@ -91,9 +104,9 @@ export function CashFlowChart({
                   {p.label}: expenses {money(p.expense)}
                 </title>
               </rect>
-              {(points.length <= 12 ||
-                i % 5 === 0 ||
-                i === points.length - 1) && (
+              {(i === points.length - 1 ||
+                (i % labelStride === 0 &&
+                  points.length - 1 - i >= labelStride * 0.65)) && (
                 <text
                   x={x}
                   y={height - 14}

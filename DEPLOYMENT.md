@@ -1,12 +1,22 @@
 # Vercel and Supabase setup
 
+Production: [thegardenssystem.vercel.app](https://thegardenssystem.vercel.app). The Vercel project is connected to `jeremycapocyan/thegardenssystem`; pushes to `main` deploy automatically. A dedicated Supabase Free project in Singapore stores the shared workspace.
+
 ## 1. Supabase
 
-Create a dedicated Supabase project. Use its SQL Editor to run the complete file:
+For a new installation, create a dedicated Supabase project. The current production database is already initialized. To apply versioned migrations from a trusted private local environment, put `POSTGRES_URL_NON_POOLING` in `.env.local`, download the CA certificate from Supabase's **Database → Settings → SSL configuration**, and set `PGSSLROOTCERT` to that certificate's absolute path. Run:
+
+```sh
+npm run database:migrate
+```
+
+The runner verifies the TLS certificate and hostname, applies migrations atomically, and checks stored migration checksums on subsequent runs. Never modify an applied migration; add another SQL file. Database credentials stay in the ignored environment file and are not needed by the frontend build.
+
+Alternatively, on a fresh project only, use its SQL Editor to run the complete file:
 
 `supabase/migrations/202611090001_gardens_finance.sql`
 
-Run this initial migration once on the new project. It creates tables, indexes, functions, row-level policies, audit triggers, starter categories, and realtime publication entries where supported. For future changes, add a new migration instead of rerunning this file.
+Use one initialization method; a manual SQL Editor installation does not create the local runner's migration history. The schema creates tables, indexes, functions, row-level policies, audit triggers, starter categories, and realtime publication entries where supported.
 
 ## 2. Approved accounts
 
@@ -21,7 +31,7 @@ insert into public.garden_profiles (id, display_name, role) values
   ('KEN_AUTH_USER_UUID', 'Ken', 'viewer');
 ```
 
-Add only rows for users whose addresses have been supplied. Genesis and Ken can be added later; do not invent their emails. Users establish their own passwords using Supabase's account invitation/recovery flow. Set the Auth Site URL to the deployed app URL and allow its redirect URL before sending invitations. Do not commit real addresses, credentials, or user IDs to this repository.
+Add only rows for users whose addresses have been supplied. Genesis and Ken can be added later; do not invent their emails. Users establish their own passwords using Supabase's account invitation/recovery flow. Set the Auth Site URL to the deployed app URL and allow `https://thegardenssystem.vercel.app/account/` as the invitation/recovery redirect before sending invitations. The `/account/` page lets each person choose their own password. Do not commit real addresses, credentials, or user IDs to this repository.
 
 ## 3. Public application configuration
 
