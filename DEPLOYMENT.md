@@ -43,9 +43,9 @@ Connect the Vercel project to `jeremycapocyan/thegardenssystem`, with root direc
 - Framework: Next.js
 - Install: `npm ci`
 - Build: `npm run build`
-- Output: `out` (configured in `vercel.json`)
+- Output: leave the Vercel override unset; its Next.js adapter handles the static export. The local exported files are in `out`.
 - Production branch: `main`
-- Node: 22 or newer
+- Node: 24.x (pinned in `package.json`)
 
 The app exports static routes and uses Supabase directly with RLS. It has no external spreadsheet connection or server secret in the frontend. If Supabase variables are missing, shared login is disabled and the isolated demo remains available.
 

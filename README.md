@@ -4,7 +4,7 @@ A Next.js finance workspace for a pickleball court, with Philippine peso reports
 
 ## Run locally
 
-Use Node.js 22 or later.
+Use Node.js 24.
 
 ```sh
 npm ci
