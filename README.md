@@ -44,7 +44,13 @@ npm start
 
 ## Shared access
 
-Supabase provides authentication and PostgreSQL. Only explicitly provisioned members can read business data. Jeremy is an admin; Genesis and Ken are viewers. Row-level security enforces these permissions in the database, independently of buttons in the browser. Admin changes generate a server-written audit history. Never put a service-role key or database password into a `NEXT_PUBLIC_` variable.
+Open **Settings → Accounts & permissions** to create administrator or finance-viewer accounts, invite registered employees, resend password setup emails, and enable/disable access. Administrators never choose or see another user's password. The original Jeremy account is the protected owner.
+
+Administrator permissions are independent: **Finance management**, **Employees & payroll**, and **Account management**. Grant Account management to admins who should invite and manage accounts. Delegated managers cannot grant permissions they do not hold or modify an account outside their permission scope; nobody can demote/disable the owner or edit their own access. Employee accounts cannot be converted into administrator/viewer accounts; use a separate email for dual responsibilities. Disabling an account blocks database reads and writes even with an existing login session. Re-enabling preserves its history. Account changes are audited.
+
+Register employees and workdays in **Employees & payroll**, then invite them either there (Account management permission required) or from Settings. A staff manager without finance access opens the staff workspace; an account manager without finance access can still open `/settings/`. Finance-only admins cannot read private staff records, including HR audit snapshots. Genesis and Ken retain their existing viewer access.
+
+Supabase provides authentication and PostgreSQL. Only explicitly provisioned members can read business data. Row-level security enforces permissions in the database, independently of buttons in the browser. Admin changes generate a server-written audit history. Never put a service-role key or database password into a `NEXT_PUBLIC_` variable.
 
 The migration seeds categories only. Live transaction logs begin empty. There is no automatic Excel import or opening balance; the sample records are separate.
 

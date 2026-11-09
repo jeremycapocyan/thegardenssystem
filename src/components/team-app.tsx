@@ -27,6 +27,7 @@ import { useWorkspace } from "./workspace-provider";
 import { useTeam } from "./use-team";
 import { TeamDialog, type TeamEditor } from "./team-dialog";
 import { CourtScanner } from "./court-scanner";
+import { canManage, canViewFinance } from "@/lib/access";
 import { csv, displayDate, money, todayInManila } from "@/lib/finance";
 import {
   demoTeam,
@@ -85,7 +86,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   const router = useRouter();
   const ws = useWorkspace(),
     team = useTeam();
-  const admin = ws.profile?.role === "admin",
+  const admin = canManage(ws.profile, "team"),
     employeeRole = ws.profile?.role === "employee";
   const [tab, setTab] = useState<Tab>(scan ? "scan" : "overview");
   const [period, setPeriod] = useState(employeePeriod(todayInManila()));
@@ -382,12 +383,17 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
           <ShieldCheck size={36} />
           <h1>Employee records are private.</h1>
           <p>
-            Jeremy manages this section. Your finance reports are available as
-            usual.
+            Your account does not have employee and payroll management
+            permission.
           </p>
           <Link href="/" className="button primary">
-            Open finance reports
+            Open your workspace
           </Link>
+          {canManage(ws.profile, "accounts") && (
+            <Link href="/settings/" className="button secondary">
+              Manage accounts
+            </Link>
+          )}
         </section>
       </main>
     );
@@ -425,10 +431,15 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
               </button>
             );
           })}
-          {admin && (
+          {canViewFinance(ws.profile) && (
             <Link className="nav-item" href="/">
               <ArrowLeft size={18} />
               Finance workspace
+            </Link>
+          )}
+          {canManage(ws.profile, "accounts") && (
+            <Link className="nav-item" href="/settings/">
+              Accounts & permissions
             </Link>
           )}
         </nav>
@@ -883,7 +894,16 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                   </button>
                                   <button
                                     className="button secondary compact"
-                                    disabled={busy || !e.active}
+                                    disabled={
+                                      busy ||
+                                      !e.active ||
+                                      !canManage(ws.profile, "accounts")
+                                    }
+                                    title={
+                                      !canManage(ws.profile, "accounts")
+                                        ? "Account management permission is required to send invitations."
+                                        : undefined
+                                    }
                                     onClick={() => void invite(e.id)}
                                   >
                                     Invite / resend
@@ -1703,6 +1723,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     <label className="field">
                       <span>Expense category</span>
                       <select
+                        disabled={!canViewFinance(ws.profile)}
                         value={
                           data.settings?.wages_category_id ||
                           ws.data.categories.find(
@@ -1716,6 +1737,13 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                           })
                         }
                       >
+                        {!canViewFinance(ws.profile) && (
+                          <option
+                            value={data.settings?.wages_category_id || ""}
+                          >
+                            Assigned wages category · managed by finance
+                          </option>
+                        )}
                         {ws.data.categories
                           .filter(
                             (c) =>

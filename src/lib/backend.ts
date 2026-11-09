@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { canViewFinance } from "./access";
 import {
   EMPTY_DATA,
   type Collection,
@@ -31,7 +32,9 @@ export async function loadWorkspace(): Promise<{
   if (authError || !auth.user) throw new Error("Please sign in again.");
   const { data: profile, error: profileError } = await api
     .from("garden_profiles")
-    .select("id, display_name, role")
+    .select(
+      "id, display_name, role, active, is_owner, finance_access, team_access, manage_accounts",
+    )
     .eq("id", auth.user.id)
     .maybeSingle();
   if (profileError)
@@ -40,7 +43,11 @@ export async function loadWorkspace(): Promise<{
     throw new Error(
       "Your account does not have access to The Gardens workspace. Ask Jeremy to add your account.",
     );
-  if (profile.role === "employee")
+  if (!profile.active)
+    throw new Error(
+      "Your account does not have access because it is disabled. Ask an account administrator.",
+    );
+  if (!canViewFinance(profile as Profile))
     return { profile: profile as Profile, data: EMPTY_DATA };
   const { data, error } = await api.rpc("garden_snapshot");
   if (error)

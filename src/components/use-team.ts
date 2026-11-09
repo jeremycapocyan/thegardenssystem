@@ -16,6 +16,7 @@ import {
   type StaffCash,
 } from "@/lib/team";
 import { useWorkspace } from "./workspace-provider";
+import { canManage } from "@/lib/access";
 
 export function useTeam() {
   const ws = useWorkspace();
@@ -23,7 +24,7 @@ export function useTeam() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const allowed =
-    ws.profile?.role === "admin" || ws.profile?.role === "employee";
+    canManage(ws.profile, "team") || ws.profile?.role === "employee";
   const refresh = useCallback(async () => {
     if (ws.mode === "demo") return;
     if (ws.mode !== "live" || !allowed) {

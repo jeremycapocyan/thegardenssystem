@@ -54,6 +54,8 @@ import {
 import { DEMO_AS_OF, DEMO_REFERENCE } from "@/lib/demo";
 import type { Collection, Period, View } from "@/lib/types";
 import { getBackend } from "@/lib/backend";
+import { canManage, canViewFinance } from "@/lib/access";
+import { AccountSettings, RestrictedWorkspace } from "./account-settings";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -542,7 +544,7 @@ export function FinanceApp({ view }: { view: View }) {
   }, [toast]);
   const range = periodRange(period, reference);
   const month = monthStart(reference);
-  const admin = ws.profile?.role === "admin";
+  const admin = canManage(ws.profile, "finance");
   const summary = totals(ws.data, range.start, range.end);
   const shares = ownerShares(summary.net);
   const categoryName = (id: string) =>
@@ -833,6 +835,8 @@ export function FinanceApp({ view }: { view: View }) {
   }
   if (ws.mode !== "live" && ws.mode !== "demo") return <Login />;
   if (ws.profile?.role === "employee") return <EmployeeRedirect />;
+  if (!canViewFinance(ws.profile))
+    return <RestrictedWorkspace settings={view === "settings"} />;
   return (
     <div className="app-shell">
       {menuOpen && (
@@ -867,7 +871,7 @@ export function FinanceApp({ view }: { view: View }) {
               </Link>
             );
           })}
-          {admin && (
+          {canManage(ws.profile, "team") && (
             <Link className="nav-item" href="/team/">
               <Users size={19} />
               Employees & payroll
@@ -1704,6 +1708,7 @@ export function FinanceApp({ view }: { view: View }) {
 
           {view === "settings" && (
             <>
+              <AccountSettings />
               <div className="settings-grid">
                 <section className="panel settings-panel">
                   <div className="panel-heading">

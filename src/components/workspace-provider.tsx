@@ -19,6 +19,7 @@ import {
 } from "@/lib/backend";
 import { demoData, DEMO_REFERENCE, DEMO_AS_OF } from "@/lib/demo";
 import { todayInManila } from "@/lib/finance";
+import { canManage } from "@/lib/access";
 import {
   EMPTY_DATA,
   type Collection,
@@ -88,8 +89,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const message =
         err instanceof Error ? err.message : "Unable to load the workspace.";
       setError(message);
-      if (message.includes("does not have access")) setMode("denied");
-      else
+      if (message.includes("does not have access")) {
+        setMode("denied");
+        setData(EMPTY_DATA);
+        setProfile(null);
+      } else
         setMode((previous) =>
           previous === "loading" ? "signed-out" : previous,
         );
@@ -123,7 +127,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setReference(DEMO_REFERENCE);
     setAsOf(DEMO_AS_OF);
     setData(demo);
-    setProfile({ id: "sample-jeremy", display_name: "Jeremy", role: "admin" });
+    setProfile({
+      id: "sample-jeremy",
+      display_name: "Jeremy",
+      role: "admin",
+      is_owner: true,
+      active: true,
+      finance_access: true,
+      team_access: true,
+      manage_accounts: true,
+    });
     setMode("demo");
     setError("");
     setSyncedAt(new Date());
@@ -187,7 +200,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSyncedAt(new Date());
   }
   function assertAdmin() {
-    if (profile?.role !== "admin")
+    if (!canManage(profile, "finance"))
       throw new Error(
         "Your account has viewing access. Jeremy manages the records.",
       );
@@ -254,6 +267,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (mode !== "demo") return;
       commitDemo(demoData());
       localStorage.removeItem("gardens.team.sample.v1");
+      localStorage.removeItem("gardens.accounts.sample.v1");
       window.dispatchEvent(new Event("gardens-demo-reset"));
     },
     previewRole(role) {
@@ -267,6 +281,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 ? "Alex Reyes"
                 : "Genesis",
           role,
+          is_owner: role === "admin",
+          active: true,
+          finance_access: role !== "employee",
+          team_access: role === "admin",
+          manage_accounts: role === "admin",
         });
     },
     async save(collection, values) {

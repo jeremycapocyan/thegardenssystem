@@ -23,13 +23,11 @@ Create or invite each user in Supabase **Authentication → Users**. Use the int
 Then run the following in the Supabase SQL Editor, replacing placeholders with the corresponding Authentication user UUIDs:
 
 ```sql
-insert into public.garden_profiles (id, display_name, role) values
-  ('JEREMY_AUTH_USER_UUID', 'Jeremy', 'admin'),
-  ('GENESIS_AUTH_USER_UUID', 'Genesis', 'viewer'),
-  ('KEN_AUTH_USER_UUID', 'Ken', 'viewer');
+insert into public.garden_profiles (id, display_name, role, is_owner, manage_accounts, finance_access, team_access) values
+  ('JEREMY_AUTH_USER_UUID', 'Jeremy', 'admin', true, true, true, true);
 ```
 
-Add only rows for users whose addresses have been supplied. Genesis and Ken can be added later; do not invent their emails. Users establish their own passwords using Supabase's account invitation/recovery flow. Set the Auth Site URL to the deployed app URL and allow `https://thegardenssystem.vercel.app/account/` as the invitation/recovery redirect before sending invitations. The `/account/` page lets each person choose their own password. Do not commit real addresses, credentials, or user IDs to this repository.
+This manual owner bootstrap is for a fresh installation only; the existing production owner is preserved by the migration. Use **Settings → Accounts & permissions** to add other administrators, viewers, and registered employees. Add only people whose addresses have been supplied. Genesis and Ken can be added later; do not invent their emails. Users establish their own passwords using Supabase's account invitation/recovery flow. Set the Auth Site URL to the deployed app URL and allow `https://thegardenssystem.vercel.app/account/` as the invitation/recovery redirect before sending invitations. The `/account/` page lets each person choose their own password. Do not commit real addresses, credentials, or user IDs to this repository.
 
 ## 3. Public application configuration
 
@@ -42,7 +40,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
 
 These public values identify the project; database policies provide authorization. A legacy anon key also works in the publishable-key variable. Never use the secret/service-role key in either public variable.
 
-Employee invitation requests use `POST /api/team/invite/`. Configure `SUPABASE_SERVICE_ROLE_KEY` as a **server-only** environment variable in local development and Vercel. The route verifies the caller with Supabase Auth and checks their database admin role before inviting or linking an employee. A key named `SUPABASE_SECRET_KEY` is accepted as a server-only alternative. The Supabase/Vercel integration already supplies these private values for the connected deployment. Do not copy them into browser code or Git.
+Account management uses `/api/accounts/`; employee invitations also support `POST /api/team/invite/`. Configure `SUPABASE_SERVICE_ROLE_KEY` as a **server-only** environment variable in local development and Vercel. The routes verify the caller with Supabase Auth and check their current Account management permission. A key named `SUPABASE_SECRET_KEY` is accepted as a server-only alternative. The Supabase/Vercel integration already supplies these private values for the connected deployment. Do not copy them into browser code or Git.
 
 Invitations use the canonical `APP_URL`, defaulting to `https://thegardenssystem.vercel.app`, so an invitation sent from a preview does not lead to an unapproved preview callback. Set `APP_URL` and the corresponding Supabase `/account/` redirect allowlist together when using a different domain.
 
@@ -70,3 +68,9 @@ The app uses the Next.js runtime for authenticated employee invitations and Supa
 5. Keep the demo separate from real records. Establish database backups using Supabase's available backup/export facilities; CSV report exports are not a complete restore source.
 6. Register a real employee only when their details are supplied. Invite them through **Employees**, print the court QR, and verify their own-account attendance menu on a phone. Allow camera permission when using the portal scanner; the phone's Camera app can also open the printed QR URL. Confirm that account links return to `/account/` before the employee opens their portal.
 7. Apply employee migrations before deploying the employee UI. The migration narrows old finance membership policies before enabling employee roles. Existing finance tests run against every migration, and additional tests cover private HR access, payroll rounding, advance allocations, idempotent cash posting, and QR decoding. Production smoke checks must not insert fictional attendance or salary payments.
+
+## Account permissions migration
+
+Apply `202611100002_account_permissions.sql` before deploying the account-management UI. It preserves the existing sole administrator as the protected owner and separates finance, staff, and account-management permissions. If a deployment already has multiple administrators, explicitly identify the owner before applying this migration; it does not guess between multiple admins. Apply with `npm run database:migrate`; do not edit prior applied migrations.
+
+`/api/accounts/` and `/api/team/invite/` require a current, active account-management permission. Role changes and employee account linking are checked again inside service-only database transactions. Existing live server-only Supabase credentials and `APP_URL` are reused. No additional public credentials are needed. Account creation sends a password recovery/setup email; Supabase email redirect settings must allow the canonical `/account/` URL. No real invitations are sent by tests or sample mode.

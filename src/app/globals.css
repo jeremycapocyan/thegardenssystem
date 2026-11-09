@@ -2556,3 +2556,127 @@ td > strong {
   margin-bottom: 23px;
   font-size: 12px;
 }
+
+.account-settings {
+  margin-bottom: 24px;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.account-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 24px 22px;
+  color: var(--muted);
+  max-width: 900px;
+}
+.account-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.account-block {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.account-editor {
+  margin: 0 24px 24px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--canvas);
+}
+.account-editor h3 {
+  margin: 0 0 20px;
+}
+.account-editor .account-actions {
+  margin-top: 22px;
+}
+.account-check {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.account-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--forest);
+}
+.account-check small {
+  display: block;
+  flex-basis: 100%;
+  margin-left: 26px;
+  color: var(--muted);
+}
+.account-permissions {
+  display: grid;
+  gap: 18px;
+  margin: 20px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  background: white;
+}
+.account-permissions legend {
+  padding: 0 8px;
+  font-weight: 600;
+}
+.account-invite {
+  padding: 24px;
+  border-top: 1px solid var(--line);
+}
+.account-invite h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.account-invite p {
+  color: var(--muted);
+}
+.account-invite select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+  max-width: 100%;
+}
+.account-settings .error-box,
+.account-settings .setup-note {
+  margin: 0 24px 20px;
+}
+.restricted-workspace {
+  max-width: 1250px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+.restricted-workspace > nav {
+  margin-bottom: 28px;
+}
+@media (max-width: 640px) {
+  .account-settings .panel-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .account-editor {
+    margin: 0 14px 20px;
+    padding: 16px;
+  }
+  .account-note {
+    margin: 0 14px 20px;
+  }
+  .account-invite {
+    padding: 18px 14px;
+  }
+  .account-invite select {
+    width: 100%;
+  }
+  .restricted-workspace {
+    padding: 24px 14px;
+  }
+}

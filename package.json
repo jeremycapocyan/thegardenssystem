@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/finance.test.ts src/lib/team.test.ts scripts/database.test.mjs scripts/payroll.test.mjs scripts/qr.test.mjs",
+    "test": "tsx --test src/lib/finance.test.ts src/lib/team.test.ts src/lib/access.test.ts scripts/database.test.mjs scripts/payroll.test.mjs scripts/accounts.test.mjs scripts/qr.test.mjs",
     "database:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "format": "prettier --write src scripts"
   },

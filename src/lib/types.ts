@@ -15,6 +15,11 @@ export interface Profile {
   id: string;
   display_name: string;
   role: Role;
+  active?: boolean;
+  is_owner?: boolean;
+  finance_access?: boolean;
+  team_access?: boolean;
+  manage_accounts?: boolean;
 }
 export interface Category {
   id: string;
