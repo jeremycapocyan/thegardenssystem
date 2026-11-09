@@ -268,6 +268,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       commitDemo(demoData());
       localStorage.removeItem("gardens.team.sample.v1");
       localStorage.removeItem("gardens.accounts.sample.v1");
+      localStorage.removeItem("gardens.roi.sample.v1");
       window.dispatchEvent(new Event("gardens-demo-reset"));
     },
     previewRole(role) {

@@ -28,6 +28,7 @@ import {
   Trash2,
   Users,
   Wallet,
+  TrendingUp,
   X,
 } from "lucide-react";
 import { useWorkspace } from "./workspace-provider";
@@ -56,6 +57,7 @@ import type { Collection, Period, View } from "@/lib/types";
 import { getBackend } from "@/lib/backend";
 import { canManage, canViewFinance } from "@/lib/access";
 import { AccountSettings, RestrictedWorkspace } from "./account-settings";
+import { RoiTracker } from "./roi-tracker";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -84,6 +86,7 @@ const navigation = [
     label: "Owner payouts",
     icon: Users,
   },
+  { view: "roi", href: "/roi/", label: "ROI tracker", icon: TrendingUp },
   { view: "settings", href: "/settings/", label: "Settings", icon: Settings2 },
 ] as const;
 const headings: Record<View, { title: string; subtitle: string }> = {
@@ -117,6 +120,11 @@ const headings: Record<View, { title: string; subtitle: string }> = {
   settings: {
     title: "Workspace settings",
     subtitle: "Categories, access, and the rules behind your numbers.",
+  },
+  roi: {
+    title: "Return on your court.",
+    subtitle:
+      "Track invested capital, cash returns, and each owner’s recovery.",
   },
 };
 export function CourtMark({ size = 36 }: { size?: number }) {
@@ -976,13 +984,13 @@ export function FinanceApp({ view }: { view: View }) {
               <p>{headings[view].subtitle}</p>
             </div>
             <div className="heading-actions">
-              {view !== "settings" && (
+              {view !== "settings" && view !== "roi" && (
                 <button className="button secondary" onClick={download}>
                   <Download size={16} />
                   <span>Export CSV</span>
                 </button>
               )}
-              {admin && view !== "settings" && (
+              {admin && view !== "settings" && view !== "roi" && (
                 <button
                   className="button primary"
                   onClick={() =>
@@ -1016,7 +1024,7 @@ export function FinanceApp({ view }: { view: View }) {
               {ws.error || pageError}
             </div>
           )}
-          {view !== "settings" && (
+          {view !== "settings" && view !== "roi" && (
             <section className="period-bar" aria-label="Report date controls">
               <div className="period-controls">
                 <div className="segmented" aria-label="Reporting period">
@@ -1706,6 +1714,7 @@ export function FinanceApp({ view }: { view: View }) {
             </>
           )}
 
+          {view === "roi" && <RoiTracker />}
           {view === "settings" && (
             <>
               <AccountSettings />

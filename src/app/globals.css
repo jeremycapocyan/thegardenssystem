@@ -2680,3 +2680,133 @@ td > strong {
     padding: 24px 14px;
   }
 }
+
+.roi-tracker {
+  display: grid;
+  gap: 24px;
+}
+.roi-controls {
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0;
+}
+.roi-controls .account-actions {
+  margin-left: auto;
+}
+.roi-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.roi-empty {
+  padding: 28px;
+}
+.roi-empty p {
+  max-width: 750px;
+  color: var(--muted);
+}
+.roi-chart {
+  padding: 0 20px 22px;
+}
+.roi-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.roi-legend {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+.roi-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.roi-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.roi-note {
+  padding: 0 24px 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.roi-reconciliation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  background: var(--canvas);
+  margin: 0 24px 22px;
+  padding: 18px;
+  border-radius: 12px;
+}
+.roi-reconciliation span {
+  flex: 1;
+  min-width: 150px;
+  color: var(--muted);
+}
+.roi-reconciliation strong {
+  display: block;
+  color: var(--ink);
+  font-size: 19px;
+  margin-top: 6px;
+}
+.roi-tracker progress {
+  display: block;
+  width: 110px;
+  max-width: 100%;
+  height: 7px;
+  accent-color: var(--green);
+  margin-top: 8px;
+}
+.roi-tracker .panel-heading p {
+  max-width: 850px;
+}
+@media (max-width: 1150px) {
+  .roi-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .roi-metrics {
+    grid-template-columns: 1fr;
+  }
+  .roi-controls .account-actions {
+    margin-left: 0;
+  }
+  .roi-tracker .panel-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .roi-chart {
+    padding: 0 8px 20px;
+  }
+  .roi-note {
+    padding: 0 16px 16px;
+  }
+}
+
+.roi-monthly {
+  padding: 0 24px 24px;
+}
+.roi-monthly summary {
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 600;
+  margin: 10px 0;
+}
+.roi-confirm .dialog-body {
+  padding: 20px 27px;
+}
+.roi-confirm .dialog-footer {
+  padding: 20px 27px;
+  margin-top: 0;
+}

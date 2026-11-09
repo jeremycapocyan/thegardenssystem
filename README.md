@@ -32,6 +32,16 @@ npm start
 6. Record owner withdrawals in **Owner payouts**, choosing the settlement month even when paid later. Withdrawals do not reduce business profit.
 7. Add or archive categories in **Settings**. Archived categories remain available on existing records to preserve history.
 
+## ROI tracker
+
+Open **ROI tracker** to record the actual capital contributed by Genesis, Ken, and Jeremy, including later additions. Enter the original contribution dates. Capital is funding, so recording it does not create income or an expense. No live capital amounts or opening returns are assumed.
+
+The report runs from the earliest recorded capital contribution through the chosen **As of** date. **Business cash ROI = cumulative cash return ÷ contributed capital × 100**. Cash return is actual income less actual expenses, plus any explicitly marked capital purchases. Losses remain negative and increase the capital still to recover; 100% means the business has earned a capital-equivalent amount of cash, not that money has necessarily been paid to owners. This is a cash tracking measure, not an asset valuation, annualized investment return, or profit forecast.
+
+If initial construction or setup purchases are already in **Expenses** and form part of the investment being recovered, mark those existing payments under **Setup costs already in Expenses**, with a reason. They are added back only in the ROI calculation; the original expenses, finance net income, payroll, and owner shares stay unchanged. Do not mark routine operating costs. Linked payroll payments cannot be marked. If setup costs were recorded separately, leave the adjustment section empty.
+
+Owner recovery compares each owner's actual capital with actual **Owner payouts** received by payment date, regardless of settlement month. Funding is not assumed to follow the 40/40/20 profit-share split. Owner payouts do not reduce business cash ROI. Use the monthly cumulative chart, expandable figures, and CSV export to review progress. Finance admins can manage records, finance viewers can report, and employee/staff-only roles have no ROI access.
+
 ## Calculation rules
 
 - Integer centavos are used for calculations and storage. Amounts display as PHP with two decimals.
