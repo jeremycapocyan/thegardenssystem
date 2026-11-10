@@ -1,0 +1,435 @@
+/* The Gardens: colors sampled from the owner's original logo artwork. */
+.brand-crest {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  vertical-align: middle;
+  background: #f5f4d5;
+  border: 1px solid #b58b2555;
+  border-radius: 10px;
+}
+.brand-crest img {
+  position: absolute;
+  width: 133%;
+  height: 133%;
+  max-width: none;
+  object-fit: contain;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.brand-wordmark {
+  width: min(100%, 380px);
+  aspect-ratio: 2.6;
+  overflow: hidden;
+  position: relative;
+  background: var(--navy);
+}
+.brand-wordmark img {
+  position: absolute;
+  width: 185%;
+  max-width: none;
+  height: auto;
+  left: -42.5%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+body,
+button,
+input,
+select,
+textarea,
+svg text {
+  font-family: Georgia, "Times New Roman", serif;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
+}
+.button {
+  font-size: 14px;
+}
+.button.compact {
+  font-size: 12px;
+}
+.field > span {
+  font-size: 13px;
+}
+.field input,
+.field select,
+.field textarea {
+  font-size: 15px;
+}
+.panel-heading h2 {
+  font-size: 19px;
+}
+.panel-heading p,
+.stat-top,
+.stat-note,
+.chart-summary,
+.data-table {
+  font-size: 13px;
+}
+.chart-tick,
+.chart-label {
+  font-size: 12px;
+}
+.button.primary {
+  background: var(--burgundy);
+  color: var(--cream);
+  box-shadow: 0 2px 3px #001b3d12;
+}
+.button.primary:hover {
+  background: #742424;
+}
+.button.secondary {
+  background: var(--white);
+  border-color: var(--line);
+}
+.button.secondary:hover,
+.icon-button:hover {
+  background: #f1ead9;
+}
+.sidebar {
+  background: var(--navy);
+  color: var(--cream);
+  border-right: 1px solid #b58b2540;
+  overflow-y: auto;
+}
+.brand {
+  gap: 11px;
+  padding: 0 7px;
+}
+.brand > span:not(.brand-crest) {
+  font-size: 14px;
+  letter-spacing: 0.075em;
+}
+.brand small {
+  color: #d9cfae;
+}
+.nav-label {
+  color: #cbbd99;
+}
+.nav-item {
+  color: #e6dfca;
+  font-size: 14px;
+}
+.nav-item.active,
+.staff-nav.active {
+  background: var(--cream);
+  color: var(--burgundy);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.nav-dot {
+  background: var(--burgundy);
+}
+.split-note {
+  background: #082746;
+  border-color: #314861;
+}
+.split-note > svg,
+.split-note > strong {
+  color: #e9cd80;
+}
+.split-note p,
+.split-note small {
+  color: #d5cdb7;
+}
+.split-note div span {
+  color: var(--cream);
+}
+.sidebar-profile {
+  border-color: #314861;
+}
+.sidebar-profile small,
+.sidebar-profile button {
+  color: #d5cdb7;
+}
+.sidebar-profile button:hover {
+  background: #173654;
+  color: var(--cream);
+}
+.avatar {
+  background: var(--burgundy);
+  color: var(--cream);
+}
+.topbar {
+  background: #fffdf6ed;
+  border-bottom-color: var(--line);
+}
+.role-tag,
+.workspace-label,
+.breadcrumb {
+  color: var(--muted);
+}
+.demo-banner {
+  background: #f5edcf;
+  border-color: #e6d7a8;
+  color: #6c572c;
+}
+.demo-banner select {
+  background: var(--white);
+  color: #6c572c;
+  border-color: #d7c693;
+}
+.demo-banner button {
+  color: #6c572c;
+}
+.panel,
+.stat,
+.settlement-card,
+.period-bar,
+.owner-card {
+  background: var(--white);
+  border-color: var(--line);
+}
+.stat-accent {
+  background: #f7edcc;
+  border-color: #e1cd95;
+}
+.stat-accent .stat-icon {
+  background: #eee0b7;
+  border-color: #dfca8f;
+  color: #79591c;
+}
+.stat-accent .stat-top,
+.stat-accent .stat-note {
+  color: #75613b;
+}
+.stat-top,
+.stat-note,
+.chart-summary > span,
+.section-heading p,
+.panel-heading p,
+.chart-tick,
+.chart-label {
+  color: var(--muted);
+  fill: var(--muted);
+}
+.date-control,
+.segmented {
+  border-color: var(--line);
+}
+.segmented {
+  background: #f0eadc;
+}
+.segmented button.selected {
+  color: var(--burgundy);
+  background: var(--white);
+}
+.data-table thead,
+.data-table th {
+  background: #f5efdf;
+  color: #695b45;
+  border-color: var(--line);
+}
+.data-table td {
+  border-color: #eae2d1;
+}
+.data-table tbody tr:hover {
+  background: #fcf7e9;
+}
+.badge.success {
+  background: #eef2df;
+  color: #436220;
+}
+.badge.warm {
+  background: #fbefcd;
+  color: #80601b;
+}
+.badge.danger,
+.badge.overpaid {
+  background: #f9e8e1;
+  color: var(--burgundy);
+}
+.badge.neutral {
+  background: #eeece4;
+  color: #5d6270;
+}
+.owner-0 {
+  background: #f3dfd5;
+  color: var(--burgundy);
+}
+.owner-1 {
+  background: #f2e8c6;
+  color: #80601b;
+}
+.owner-2 {
+  background: #e1e7ec;
+  color: var(--navy);
+}
+.form-note,
+.empty-inline,
+.empty p,
+.table-note,
+.account-block {
+  color: var(--muted);
+}
+.field > span {
+  color: #625747;
+}
+.field input,
+.field select,
+.field textarea {
+  background: var(--white);
+  border-color: #dacfba;
+}
+.field input:read-only {
+  background: #f2eddf;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline-color: var(--gold);
+}
+.record-dialog,
+.account-card {
+  background: var(--white);
+  border-color: var(--line);
+}
+.record-dialog::backdrop {
+  background: #001b3d70;
+}
+.dialog-heading,
+.dialog-footer {
+  border-color: var(--line);
+}
+.toast {
+  background: var(--navy);
+  border-color: var(--gold);
+  color: var(--cream);
+}
+.login-story {
+  background: var(--navy);
+  color: var(--cream);
+  padding-top: 32px;
+}
+.login-brand {
+  width: 100%;
+}
+.login-copy {
+  margin-top: 42px;
+}
+.login-copy h1 {
+  color: var(--cream);
+  font-size: clamp(38px, 3.6vw, 58px);
+  letter-spacing: -0.035em;
+}
+.login-copy > .eyebrow,
+.story-points svg {
+  color: #e1bd68;
+}
+.login-copy > p,
+.story-points {
+  color: #e1d7bb;
+  font-size: 14px;
+}
+.login-story-footer {
+  color: #c1b48d;
+  padding-top: 36px;
+}
+.login-form-side {
+  background: var(--canvas);
+}
+.login-form-card > .brand-crest {
+  margin-bottom: 24px;
+}
+.login-form-card > .eyebrow {
+  color: var(--burgundy);
+}
+.login-form-card > .muted,
+.login-footnote,
+.login-copyright {
+  color: var(--muted);
+  font-size: 13px;
+}
+.login-form-card h2 {
+  font-weight: 400;
+  font-size: 35px;
+}
+.login-divider {
+  color: var(--muted);
+}
+.login-divider::before {
+  background: var(--line);
+}
+.login-divider > span {
+  background: var(--canvas);
+}
+.demo-entry,
+.login-form-card .text-button {
+  color: var(--burgundy);
+}
+.court-lines {
+  border-color: #b58b2540;
+  background: #b58b2508;
+}
+.court-lines::before,
+.court-lines::after,
+.court-lines i::before,
+.court-lines i::after,
+.court-lines b {
+  background: #b58b2540;
+}
+.court-ball {
+  background: #476b2920;
+  border-color: #77983c70;
+}
+.court-qr-sheet {
+  background: var(--white);
+  border-top: 4px solid var(--burgundy);
+}
+.income-dot {
+  background: var(--burgundy);
+}
+.expense-dot {
+  background: var(--gold);
+}
+.net-dot {
+  background: var(--green);
+}
+.account-permissions {
+  background: var(--white);
+}
+@media (max-width: 640px) {
+  .field input,
+  .field select,
+  .field textarea {
+    font-size: 16px;
+  }
+  .login-story {
+    padding: 20px 26px 25px;
+  }
+  .brand-wordmark {
+    width: 260px;
+    max-width: 100%;
+  }
+  .login-copy {
+    margin-top: 14px;
+  }
+  .login-copy h1 {
+    font-size: 32px;
+    line-height: 1.1;
+  }
+  .login-copy > .eyebrow,
+  .login-copy > p,
+  .login-story-footer {
+    display: none;
+  }
+  .login-form-card > .brand-crest {
+    width: 50px !important;
+    height: 50px !important;
+    margin-bottom: 18px;
+  }
+  .login-form-side {
+    padding-top: 28px;
+  }
+  .login-form-card h2 {
+    font-size: 30px;
+  }
+  .nav-item {
+    font-size: 14px;
+  }
+}

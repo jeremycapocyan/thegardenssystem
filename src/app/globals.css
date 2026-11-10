@@ -1,15 +1,18 @@
 :root {
-  --forest: #173d2d;
-  --green: #276346;
-  --lime: #d9e9b9;
-  --ink: #233c31;
-  --muted: #627168;
-  --line: #e5e9e1;
-  --canvas: #f6f7f2;
-  --red: #b6493f;
-  --gold: #b88a3e;
-  --white: #fff;
-  --shadow: 0 3px 20px #203a2b04;
+  --navy: #001b3d;
+  --burgundy: #8e3030;
+  --cream: #fffadc;
+  --forest: var(--navy);
+  --green: #476b29;
+  --lime: var(--cream);
+  --ink: #172b42;
+  --muted: #706557;
+  --line: #e5ddc8;
+  --canvas: #f7f3e7;
+  --red: #9b3832;
+  --gold: #b58b25;
+  --white: #fffdf6;
+  --shadow: 0 3px 20px #001b3d08;
 }
 * {
   box-sizing: border-box;
@@ -18,8 +21,9 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  font-size: 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-variant-numeric: lining-nums tabular-nums;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }

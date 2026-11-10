@@ -32,6 +32,10 @@ npm start
 6. Record owner withdrawals in **Owner payouts**, choosing the settlement month even when paid later. Withdrawals do not reduce business profit.
 7. Add or archive categories in **Settings**. Archived categories remain available on existing records to preserve history.
 
+## Brand identity
+
+The owner's supplied crest and wordmark are stored unchanged in `public/brand/`. The sign-in page uses the wordmark, while navigation, account screens, court QR print sheets, and the browser icon use the crest. `src/app/brand.css` applies navy `#001B3D`, burgundy `#8E3030`, cream `#FFFADC`, gold `#B58B25`, and green accents. Interface text, forms, numbers, and chart labels use the Georgia serif family with serif fallbacks; no external font service is required.
+
 ## ROI tracker
 
 Open **ROI tracker** to record the actual capital contributed by Genesis, Ken, and Jeremy, including later additions. Enter the original contribution dates. Capital is funding, so recording it does not create income or an expense. No live capital amounts or opening returns are assumed.

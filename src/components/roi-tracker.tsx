@@ -81,7 +81,7 @@ function RoiChart({ points }: { points: ReturnType<typeof roiTrend> }) {
                 x2={width - right}
                 y1={y(value)}
                 y2={y(value)}
-                stroke="#E5EAE3"
+                stroke="var(--line)"
                 strokeDasharray="3 5"
               />
               <text
@@ -104,25 +104,25 @@ function RoiChart({ points }: { points: ReturnType<typeof roiTrend> }) {
         <polyline
           points={line("invested")}
           fill="none"
-          stroke="#B88A3E"
+          stroke="var(--gold)"
           strokeWidth="3"
           strokeDasharray="7 4"
         />
         <polyline
           points={line("returned")}
           fill="none"
-          stroke="#276346"
+          stroke="var(--burgundy)"
           strokeWidth="3"
         />
         {points.map((p, i) => (
           <g key={p.month}>
-            <circle cx={x(i)} cy={y(p.returned)} r="4" fill="#276346">
+            <circle cx={x(i)} cy={y(p.returned)} r="4" fill="var(--burgundy)">
               <title>
                 {displayMonth(p.month)}: capital {money(p.invested)}, return{" "}
                 {money(p.returned)}
               </title>
             </circle>
-            <circle cx={x(i)} cy={y(p.invested)} r="3" fill="#B88A3E" />
+            <circle cx={x(i)} cy={y(p.invested)} r="3" fill="var(--gold)" />
             {(i % 2 === 0 || i === points.length - 1) && (
               <text
                 x={x(i)}
@@ -138,11 +138,11 @@ function RoiChart({ points }: { points: ReturnType<typeof roiTrend> }) {
       </svg>
       <div className="roi-legend">
         <span>
-          <i style={{ background: "#B88A3E" }} />
+          <i style={{ background: "var(--gold)" }} />
           Capital invested
         </span>
         <span>
-          <i style={{ background: "#276346" }} />
+          <i style={{ background: "var(--burgundy)" }} />
           Cash return toward recovery
         </span>
       </div>

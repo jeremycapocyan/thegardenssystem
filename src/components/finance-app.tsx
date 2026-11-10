@@ -129,21 +129,26 @@ const headings: Record<View, { title: string; subtitle: string }> = {
 };
 export function CourtMark({ size = 36 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 40 40"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect width="40" height="40" rx="12" fill="currentColor" />
-      <path
-        d="M11 9h18v22H11zM11 20h18M20 9v22M11 15h18M11 25h18"
-        stroke="#D8E9B5"
-        strokeWidth="1.3"
+    <span className="brand-crest" style={{ width: size, height: size }}>
+      <img
+        src="/brand/gardens-crest.jpg"
+        alt="The Gardens crest"
+        width={1080}
+        height={1080}
       />
-      <circle cx="30" cy="10" r="4" fill="#D8E9B5" />
-    </svg>
+    </span>
+  );
+}
+function BrandWordmark() {
+  return (
+    <div className="brand-wordmark">
+      <img
+        src="/brand/gardens-wordmark.png"
+        alt="The Gardens Pickleball Courts"
+        width={2659}
+        height={984}
+      />
+    </div>
   );
 }
 function Badge({ children }: { children: ReactNode }) {
@@ -292,10 +297,7 @@ export function Login() {
     <main className="login-page">
       <section className="login-story">
         <div className="login-brand">
-          <CourtMark size={42} />
-          <span>
-            THE GARDENS<small>Pickleball court finance</small>
-          </span>
+          <BrandWordmark />
         </div>
         <div className="login-copy">
           <span className="eyebrow">LESS ADMIN. MORE COURT TIME.</span>
@@ -333,6 +335,7 @@ export function Login() {
       </section>
       <section className="login-form-side">
         <div className="login-form-card">
+          <CourtMark size={64} />
           <span className="eyebrow">WELCOME BACK</span>
           <h2>Your workspace awaits.</h2>
           <p className="muted">

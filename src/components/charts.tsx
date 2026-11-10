@@ -56,7 +56,7 @@ export function CashFlowChart({
                 x2={width - right}
                 y1={y(amount)}
                 y2={y(amount)}
-                stroke="#E5EAE3"
+                stroke="var(--line)"
                 strokeDasharray="3 5"
               />
               <text
@@ -86,7 +86,7 @@ export function CashFlowChart({
                 width={barWidth}
                 height={Math.max(0, zero - y(p.income))}
                 rx={3}
-                fill="#276346"
+                fill="var(--burgundy)"
               >
                 <title>
                   {p.label}: income {money(p.income)}
@@ -98,7 +98,7 @@ export function CashFlowChart({
                 width={barWidth}
                 height={Math.max(0, zero - y(p.expense))}
                 rx={3}
-                fill="#B6C9A0"
+                fill="var(--gold)"
               >
                 <title>
                   {p.label}: expenses {money(p.expense)}
@@ -123,7 +123,7 @@ export function CashFlowChart({
           <polyline
             points={line}
             fill="none"
-            stroke="#C69B48"
+            stroke="var(--green)"
             strokeWidth={2.5}
             strokeLinejoin="round"
           />
@@ -157,7 +157,13 @@ export function ExpenseMix({
       amount: sorted.slice(4).reduce((s, e) => s + e.amount, 0),
     });
   const total = visible.reduce((s, e) => s + e.amount, 0);
-  const colors = ["#276346", "#A9C480", "#D2B86F", "#7D9D9A", "#DCE4D6"];
+  const colors = [
+    "var(--burgundy)",
+    "var(--gold)",
+    "var(--green)",
+    "var(--navy)",
+    "#d8c99e",
+  ];
   let angle = 0;
   const segments = visible.map((entry, i) => {
     const start = angle;
@@ -177,7 +183,7 @@ export function ExpenseMix({
         style={{
           background: total
             ? `conic-gradient(${segments.join(",")})`
-            : "#E8EDE5",
+            : "var(--line)",
         }}
       >
         <div>
