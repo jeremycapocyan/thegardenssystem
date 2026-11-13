@@ -36,7 +36,7 @@ async function context(request: Request) {
   const api = createClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  return { api, actor: profile.data as Profile };
+  return { api, caller, actor: profile.data as Profile };
 }
 export async function listAccounts(request: Request) {
   const ctx = await context(request);
@@ -79,7 +79,7 @@ export async function changeAccount(request: Request) {
   const ctx = await context(request);
   if (ctx instanceof Response) return ctx;
   try {
-    const { api, actor } = ctx,
+    const { api, caller, actor } = ctx,
       body = await request.json();
     const action = body.action || (body.employee_id ? "invite_employee" : "");
     const redirectTo = new URL(
@@ -255,6 +255,27 @@ export async function changeAccount(request: Request) {
       manage_accounts:
         target.data.role === "admin" && target.data.manage_accounts,
     });
+    if (action === "revoke_pin") {
+      if (target.data.role !== "employee")
+        throw Error("Choose an employee account.");
+      const employee = await api
+        .from("garden_employees")
+        .select("id")
+        .eq("profile_id", body.id)
+        .single();
+      if (employee.error) throw Error("Employee account is not linked.");
+      const revoked = await caller.rpc("garden_revoke_attendance_pin", {
+        p_employee: employee.data.id,
+      });
+      if (revoked.error)
+        throw Error(
+          "Unable to revoke the attendance PIN. Check your account management permission.",
+        );
+      return reply(
+        "Attendance PIN revoked. The employee must sign in to choose a new PIN.",
+        200,
+      );
+    }
     if (action === "resend") {
       if (!target.data.active)
         throw Error("Re-enable this account before sending a setup email.");

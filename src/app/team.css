@@ -402,3 +402,131 @@
     max-width: none;
   }
 }
+
+.timesheets-panel {
+  display: grid;
+  gap: 24px;
+}
+.timesheet-filters > .form-grid {
+  padding: 0 24px 24px;
+}
+.timesheets-panel .panel-heading {
+  align-items: flex-start;
+  gap: 18px;
+}
+.timesheets-panel .roi-note svg {
+  vertical-align: middle;
+}
+.pin-setup {
+  display: block;
+  max-width: 800px;
+}
+.pin-setup > p {
+  margin: 18px 0;
+}
+.pin-setup form {
+  margin: 24px 0;
+}
+.pin-setup form > .button {
+  margin-top: 20px;
+}
+.employee-code {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--cream);
+  padding: 20px;
+  border-radius: 12px;
+  margin-top: 22px;
+}
+.employee-code strong {
+  font-size: 30px;
+  letter-spacing: 0.08em;
+}
+.employee-code span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.pin-clock-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 35px 18px;
+  background: var(--canvas);
+}
+.pin-clock-card {
+  width: 100%;
+  max-width: 540px;
+  padding: 30px;
+}
+.pin-clock-card > .brand-crest {
+  margin-bottom: 22px;
+}
+.pin-clock-card h1 {
+  font-size: 30px;
+}
+.pin-clock-card > p {
+  margin-top: 16px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.pin-clock-card form {
+  margin-top: 26px;
+}
+.pin-clock-card .field {
+  margin-bottom: 18px;
+}
+.pin-clock-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pin-clock-actions .button {
+  min-height: 54px;
+  font-size: 17px;
+}
+.pin-clock-links {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 28px;
+  color: var(--burgundy);
+  font-size: 13px;
+}
+.pin-clock-note {
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.pin-clock-note svg {
+  vertical-align: middle;
+}
+.pin-confirmation {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--cream);
+  text-align: center;
+}
+.pin-confirmation span {
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .timesheet-filters .panel-heading {
+    flex-direction: column;
+  }
+  .timesheet-filters > .form-grid {
+    padding: 0 16px 20px;
+  }
+  .pin-clock-card {
+    padding: 24px 20px;
+  }
+  .pin-clock-page {
+    padding: 18px 12px;
+  }
+}

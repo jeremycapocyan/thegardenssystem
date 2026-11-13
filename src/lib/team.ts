@@ -8,6 +8,8 @@ export interface Employee {
   started_on: string;
   ended_on: string | null;
   active: boolean;
+  employee_code?: string;
+  pin_configured?: boolean;
 }
 export interface Schedule {
   id: string;
@@ -361,6 +363,8 @@ export function demoTeam(): TeamData {
       id: DEMO_EMPLOYEE,
       profile_id: "sample-employee",
       name: "Alex Reyes",
+      employee_code: "TG-0001",
+      pin_configured: false,
       email: "alex@example.invalid",
       started_on: lastPeriod,
       ended_on: null,
@@ -370,6 +374,8 @@ export function demoTeam(): TeamData {
       id: "a1000000-0000-4000-8000-000000000002",
       profile_id: null,
       name: "Sam Santos",
+      employee_code: "TG-0002",
+      pin_configured: false,
       email: "sam@example.invalid",
       started_on: lastPeriod,
       ended_on: null,

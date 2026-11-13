@@ -84,6 +84,22 @@ Every actual advance release or salary payment creates exactly one protected **W
 
 Genesis and Ken retain finance reports, including cash wage expenses, but cannot read employee requests, personal attendance, or payroll statements. Deactivated employees retain their own history and cannot submit requests or punches.
 
+## Timesheet PDFs and employee code attendance
+
+In **Employees & payroll → Timesheets**, choose one employee or all employees, then a semi-monthly, calendar-month, or custom range (maximum 31 days). Inactive employees remain available for dates during their employment. The preview and **Export timesheet PDF** use the same database report. A finalized cutoff uses its frozen daily payroll snapshot; other cutoffs are labeled Draft. A custom range includes only its selected days, even within a finalized cutoff. Exporting never finalizes payroll or creates a payment.
+
+The A4 landscape PDF contains separate attendance and earnings sections per employee, overnight punch dates, open shifts, absences/leave, scheduled shifts, recorded and approved overtime, and totals. Missed-time deductions are already reflected in regular earnings; gross equals regular earned plus approved overtime plus paid leave. Noto Serif is embedded for peso signs and names; its SIL Open Font License is included at `public/fonts/OFL.txt`. The owner's original logos remain unchanged.
+
+Each employee receives a permanent code automatically, shown in the employee register and their portal. The employee signs in, opens **Attendance PIN**, and chooses and confirms a private six-digit PIN. To replace a forgotten PIN, they use the same authenticated page. Nobody can retrieve a PIN. Account managers can revoke one under **Settings → Accounts & permissions**, requiring setup again.
+
+Existing court QR printouts now open the public code/PIN clock page. Enter the code and PIN, then explicitly select **Time In** or **Time Out**. Opening/scanning/entering credentials does not punch. The success confirmation shows only the name, action, and official Manila time, and clears the PIN. This page issues no login session; requests and personal records still require email sign-in. If a connection fails, retry the same action before making another punch. The original idempotency key is retained while that page remains open.
+
+Deployment requires the new additive migration and a server-only `ATTENDANCE_RATE_LIMIT_SECRET` containing at least 32 random bytes, configured in Vercel and private `.env.local`. Never prefix it with `NEXT_PUBLIC_`. PIN hashes use salted Node scrypt (`N=131072, r=8, p=1`); credential tables and service RPCs are inaccessible to browser roles. PostgreSQL reservations enforce five unsuccessful attempts per code and twenty per Vercel-provided client IP in fifteen minutes across instances. IPs and codes in the counter are HMAC pseudonyms; credentials are never stored in audit snapshots. Credential changes, employment/account status, and QR validity are rechecked in the punch transaction.
+
+`POST /api/attendance/pin/` derives employee identity from the verified bearer account. Public `POST /api/attendance/clock/` grants clock access only. `GET /api/team/timesheets/` requires a verified HR-authorized bearer account; finance-only admins, viewers and employees cannot export HR reports. The report RPC separately enforces the same permission. The sample workspace uses fictional browser-only attendance and PDF examples, independent of live credentials.
+
+Generate a fictional PDF fixture with `npx tsx scripts/sample-timesheet.ts`. It does not connect to Supabase. New regression tests cover PIN hashing, generic errors, role restrictions, rate windows, revocation, QR changes, duplicate/retried punches, overnight matching, report ranges/totals, frozen payroll and PDF generation, alongside the existing finance, payroll, account and ROI suites.
+
 ## Verification
 
 The automated suite covers peso precision, date/week/month boundaries, actual payment dates, owner rounding/losses, late settlements, overpayments, partial/final/completed installments, month-end due dates, CSV escaping, and database security. PGlite executes the production SQL migration and verifies admin/viewer/outsider policies, immutable membership roles, bill-version overlaps, transaction rollback, audit permissions, and snapshots exceeding 1,000 records.

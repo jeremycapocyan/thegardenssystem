@@ -27,6 +27,8 @@ import { useWorkspace } from "./workspace-provider";
 import { useTeam } from "./use-team";
 import { TeamDialog, type TeamEditor } from "./team-dialog";
 import { CourtScanner } from "./court-scanner";
+import { TimesheetsPanel } from "./timesheets-panel";
+import { EmployeePinPanel } from "./employee-pin-panel";
 import { canManage, canViewFinance } from "@/lib/access";
 import { csv, displayDate, money, todayInManila } from "@/lib/finance";
 import {
@@ -45,6 +47,8 @@ type Tab =
   | "attendance"
   | "requests"
   | "payroll"
+  | "timesheets"
+  | "pin"
   | "qr"
   | "scan";
 function Tag({ children }: { children: ReactNode }) {
@@ -142,9 +146,11 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   const pending = data.requests.filter((r) => r.status === "pending");
   const unlinked = data.employees.filter((e) => !e.profile_id).length;
   useEffect(() => {
-    if (scan)
-      setCourt(new URLSearchParams(window.location.search).get("court") || "");
-  }, [scan]);
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("court")) setCourt(query.get("court") || "");
+    if (employeeRole && query.get("setup") === "pin") setTab("pin");
+    else if (scan || query.get("clock") === "1") setTab("scan");
+  }, [scan, employeeRole]);
   useEffect(() => {
     if (ws.mode === "demo")
       setPeriod(employeePeriod(demoTeam().attendance[0].work_date));
@@ -152,7 +158,14 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   useEffect(() => {
     if (
       employeeRole &&
-      !["overview", "attendance", "requests", "payroll", "scan"].includes(tab)
+      ![
+        "overview",
+        "attendance",
+        "requests",
+        "payroll",
+        "scan",
+        "pin",
+      ].includes(tab)
     )
       setTab(scan ? "scan" : "overview");
   }, [employeeRole, tab, scan]);
@@ -365,6 +378,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         { id: "overview", label: "Team overview", icon: Users },
         { id: "employees", label: "Employees", icon: Users },
         { id: "attendance", label: "Attendance", icon: CalendarDays },
+        { id: "timesheets", label: "Timesheets", icon: ClipboardCheck },
         { id: "requests", label: "Requests & advances", icon: ClipboardCheck },
         { id: "payroll", label: "Payroll", icon: Wallet },
         { id: "qr", label: "Court QR & settings", icon: QrCode },
@@ -374,6 +388,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         { id: "attendance", label: "My attendance", icon: CalendarDays },
         { id: "requests", label: "My requests", icon: ClipboardCheck },
         { id: "payroll", label: "My payslips", icon: Wallet },
+        { id: "pin", label: "Attendance PIN", icon: ShieldCheck },
       ];
   if (ws.mode !== "live" && ws.mode !== "demo") return <Login />;
   if (!admin && !employeeRole)
@@ -539,6 +554,16 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
               </button>
               {!admin && (
                 <button
+                  className="button secondary"
+                  onClick={() => nav("pin")}
+                  disabled={!employee?.active}
+                >
+                  <ShieldCheck size={17} />
+                  Attendance PIN
+                </button>
+              )}
+              {!admin && (
+                <button
                   className="button primary"
                   onClick={() => setScanner(true)}
                   disabled={!employee?.active}
@@ -573,45 +598,49 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
             <Blank>Loading employee records…</Blank>
           ) : (
             <>
-              {tab !== "employees" && tab !== "qr" && tab !== "scan" && (
-                <section className="staff-controls">
-                  <label className="field">
-                    <span>Payroll period</span>
-                    <input
-                      type="date"
-                      aria-label="Payroll period reference"
-                      value={period}
-                      onChange={(event) => {
-                        if (event.target.value)
-                          setPeriod(employeePeriod(event.target.value));
-                      }}
-                    />
-                  </label>
-                  <span>
-                    {displayDate(period)} — {displayDate(payrollEnd(period))}
-                  </span>
-                  {admin && (
+              {tab !== "employees" &&
+                tab !== "qr" &&
+                tab !== "scan" &&
+                tab !== "timesheets" &&
+                tab !== "pin" && (
+                  <section className="staff-controls">
                     <label className="field">
-                      <span>Employee</span>
-                      <select
-                        aria-label="Select employee"
-                        value={eid}
-                        onChange={(event) => setSelected(event.target.value)}
-                      >
-                        {!people.length && (
-                          <option value="">No employees yet</option>
-                        )}
-                        {people.map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.name}
-                            {!e.active ? " · inactive" : ""}
-                          </option>
-                        ))}
-                      </select>
+                      <span>Payroll period</span>
+                      <input
+                        type="date"
+                        aria-label="Payroll period reference"
+                        value={period}
+                        onChange={(event) => {
+                          if (event.target.value)
+                            setPeriod(employeePeriod(event.target.value));
+                        }}
+                      />
                     </label>
-                  )}
-                </section>
-              )}
+                    <span>
+                      {displayDate(period)} — {displayDate(payrollEnd(period))}
+                    </span>
+                    {admin && (
+                      <label className="field">
+                        <span>Employee</span>
+                        <select
+                          aria-label="Select employee"
+                          value={eid}
+                          onChange={(event) => setSelected(event.target.value)}
+                        >
+                          {!people.length && (
+                            <option value="">No employees yet</option>
+                          )}
+                          {people.map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.name}
+                              {!e.active ? " · inactive" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </section>
+                )}
               {tab === "overview" && (
                 <>
                   <div className="stats-grid">
@@ -807,6 +836,16 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                   </section>
                 </>
               )}
+              {tab === "timesheets" && admin && (
+                <TimesheetsPanel data={data} period={period} employeeId={eid} />
+              )}
+              {tab === "pin" && employeeRole && employee && (
+                <EmployeePinPanel
+                  employee={employee}
+                  onSaved={team.refresh}
+                  court={court}
+                />
+              )}
               {tab === "employees" && admin && (
                 <section className="panel">
                   <div className="panel-heading">
@@ -846,6 +885,14 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                 <div className="cell-stack">
                                   <strong>{e.name}</strong>
                                   <small>{e.email}</small>
+                                  <small>
+                                    {e.employee_code ||
+                                      "Code assigned on live registration"}{" "}
+                                    ·{" "}
+                                    {e.pin_configured
+                                      ? "PIN ready"
+                                      : "PIN setup needed"}
+                                  </small>
                                 </div>
                               </td>
                               <td>
@@ -1661,8 +1708,9 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     </span>
                     <h2>Scan here. Choose your action.</h2>
                     <p>
-                      Sign in to your employee portal, then choose Time In, Time
-                      Out, or a request.
+                      Enter your employee code and private six-digit PIN, then
+                      choose Time In or Time Out. Use employee sign-in for
+                      requests.
                     </p>
                     {svg ? (
                       <img
@@ -1676,8 +1724,9 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     )}
                     <strong>3:30 PM — 11:30 PM · Asia/Manila</strong>
                     <small>
-                      Employees use their own accounts. This code does not grant
-                      account access.
+                      Set your PIN once in your employee account. Email sign-in
+                      is also available. Scanning alone never records
+                      attendance.
                     </small>
                     <div className="staff-actions qr-actions">
                       <button

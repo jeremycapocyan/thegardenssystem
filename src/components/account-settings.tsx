@@ -445,6 +445,17 @@ export function AccountSettings() {
                       >
                         Resend setup email
                       </button>
+                      {a.role === "employee" && (
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() =>
+                            void submit({ action: "revoke_pin", id: a.id })
+                          }
+                        >
+                          Revoke attendance PIN
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <span className="muted">
