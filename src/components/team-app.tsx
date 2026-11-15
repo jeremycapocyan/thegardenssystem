@@ -614,13 +614,19 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                       <input
                         type="date"
                         aria-label="Payroll period reference"
+                        min="2000-01-01"
+                        max="2100-12-31"
                         value={period}
                         onInput={(event) => {
-                          if (event.currentTarget.value)
+                          if (
+                            event.currentTarget.value &&
+                            event.currentTarget.validity.valid
+                          )
                             setPeriod(event.currentTarget.value);
                         }}
                         onChange={(event) => {
-                          if (event.target.value) setPeriod(event.target.value);
+                          if (event.target.value && event.target.validity.valid)
+                            setPeriod(event.target.value);
                         }}
                       />
                     </label>

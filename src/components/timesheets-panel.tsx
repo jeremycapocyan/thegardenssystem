@@ -231,12 +231,15 @@ export function TimesheetsPanel({
               <input
                 type="date"
                 value={reference}
+                min="2000-01-01"
+                max="2100-12-31"
                 onInput={(e) => {
-                  if (e.currentTarget.value)
+                  if (e.currentTarget.value && e.currentTarget.validity.valid)
                     setReference(e.currentTarget.value);
                 }}
                 onChange={(e) => {
-                  if (e.target.value) setReference(e.target.value);
+                  if (e.target.value && e.target.validity.valid)
+                    setReference(e.target.value);
                 }}
               />
             </label>
