@@ -80,6 +80,7 @@ export interface TimesheetPdfAssets {
 export async function createTimesheetPdf(
   report: TimesheetReport,
   assets: TimesheetPdfAssets,
+  options: {attendanceOnly?:boolean;pageOffset?:number} = {},
 ): Promise<Uint8Array> {
   const {
     regular: regularBytes,
@@ -305,7 +306,7 @@ export async function createTimesheetPdf(
       ]),
       `Recorded time: ${clockDuration(t.recorded_seconds)}   |   Late: ${clockDuration(t.late_seconds)}   |   Undertime: ${clockDuration(t.undertime_seconds)}   |   Approved overtime: ${clockDuration(t.approved_ot_seconds)}. Open shifts are excluded from recorded-time totals.`,
     );
-    table(
+    if(!options.attendanceOnly) table(
       employee,
       "Earnings",
       [
@@ -355,7 +356,7 @@ export async function createTimesheetPdf(
       );
     text(
       page,
-      `${index + 1} / ${pages.length}`,
+      `${index + 1 + (options.pageOffset||0)} / ${pages.length + (options.pageOffset||0)}`,
       width - margin - 44,
       31,
       8,

@@ -19,6 +19,13 @@ test("Private PIN attendance and timesheet database reports", async (t) => {
   for (const id of [owner, viewer, finance, hr, manager, user, other])
     await db.query("insert into auth.users values($1)", [id]);
   const folder = new URL("../supabase/migrations/", import.meta.url);
+  await db.exec(`create schema storage;
+   create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+   create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text);
+   insert into storage.buckets(id,name,public) values('garden-payroll-reports','Old test bucket',true);
+   alter table storage.objects enable row level security;
+   grant usage on schema storage to anon,authenticated;grant select,insert on storage.objects to anon,authenticated;
+   create policy unrelated_broad_policy on storage.objects for all to anon,authenticated using(true) with check(true);`);
   for (const file of (await fs.readdir(folder))
     .filter((f) => f.endsWith(".sql"))
     .sort()) {
@@ -588,6 +595,337 @@ test("Private PIN attendance and timesheet database reports", async (t) => {
           .gross_cents,
         73125,
       );
+    },
+  );
+  let reportId, reportToken, payrollId;
+  await t.test(
+    "finalized reports capture immutable amounts and reject drafts, private-table reads and unauthorized RPC access",
+    async () => {
+      payrollId = await value(
+        "select id v from garden_payroll where employee_id=$1 and period_start=$2",
+        [eid, "2020-01-01"],
+      );
+      reportId = randomUUID();
+      for (const id of [user, viewer, finance, manager])
+        await as(id, () =>
+          assert.rejects(
+            db.query("select garden_payroll_report_history($1)", [payrollId]),
+            (e) => e.code === "42501",
+          ),
+        );
+      for (const id of [owner, user, viewer, finance])
+        await as(id, async () => {
+          for (const table of [
+            "garden_payroll_reports",
+            "garden_payroll_deliveries",
+            "garden_payroll_mail_connection",
+            "garden_payroll_oauth_state",
+          ])
+            await assert.rejects(
+              db.query(`select * from ${table}`),
+              (e) => e.code === "42501",
+            );
+          await assert.rejects(
+            db.query("select garden_prepare_payroll_report($1,$2,$3)", [
+              owner,
+              payrollId,
+              reportId,
+            ]),
+            (e) => e.code === "42501",
+          );
+        });
+      await assert.rejects(
+        service("select garden_prepare_payroll_report($1,$2,$3) v", [
+          owner,
+          randomUUID(),
+          randomUUID(),
+        ]),
+        /Finalize payroll/,
+      );
+      await assert.rejects(
+        service("select garden_prepare_payroll_report($1,$2,$3) v", [
+          finance,
+          payrollId,
+          randomUUID(),
+        ]),
+        (e) => e.code === "42501",
+      );
+      const prepared = await service(
+        "select garden_prepare_payroll_report($1,$2,$3) v",
+        [hr, payrollId, reportId],
+      );
+      assert.equal(prepared.claimed, true);
+      reportToken = prepared.report.render_token;
+      assert.equal(prepared.report.data.statement.gross_cents, 134062);
+      assert.equal(prepared.report.data.paid_cents, 50000);
+      assert.equal(prepared.report.data.payment_status, "Partially paid");
+      assert.equal(
+        (
+          await service("select garden_prepare_payroll_report($1,$2,$3) v", [
+            hr,
+            payrollId,
+            reportId,
+          ])
+        ).claimed,
+        false,
+      );
+      await command(owner, "pay", {
+        id: randomUUID(),
+        payroll_id: payrollId,
+        amount_cents: 20000,
+        paid_on: "2020-02-02",
+        reference: "Later test payment",
+      });
+      assert.equal(
+        (
+          await value("select data v from garden_payroll_reports where id=$1", [
+            reportId,
+          ])
+        ).paid_cents,
+        50000,
+      );
+      await service("select garden_finish_payroll_report($1,$2,$3,$4) v", [
+        reportId,
+        reportToken,
+        "a".repeat(64),
+        2000,
+      ]);
+      await assert.rejects(
+        service("select garden_finish_payroll_report($1,$2,$3,$4) v", [
+          reportId,
+          reportToken,
+          "b".repeat(64),
+          2000,
+        ]),
+        /not confirmed/,
+      );
+      const history = await as(hr, () =>
+        value("select garden_payroll_report_history($1) v", [payrollId]),
+      );
+      assert.equal(history[0].state, "ready");
+      assert.equal(history[0].paid_cents, 50000);
+      assert.equal(history[0].render_token, undefined);
+      const next = await service(
+        "select garden_prepare_payroll_report($1,$2,$3) v",
+        [hr, payrollId, randomUUID()],
+      );
+      assert.equal(next.report.data.paid_cents, 70000);
+      await db.query(
+        "update garden_payroll_reports set render_until=now()-interval '1 second' where id=$1",
+        [next.report.id],
+      );
+      const staleHistory = await as(hr, () =>
+        value("select garden_payroll_report_history($1) v", [payrollId]),
+      );
+      assert.equal(
+        staleHistory.find((r) => r.id === next.report.id).can_retry,
+        true,
+      );
+      const reclaimed = await service(
+        "select garden_prepare_payroll_report($1,$2,$3) v",
+        [hr, payrollId, next.report.id],
+      );
+      assert.equal(reclaimed.claimed, true);
+      assert.notEqual(reclaimed.report.render_token, next.report.render_token);
+      assert.deepEqual(reclaimed.report.data, next.report.data);
+      await assert.rejects(
+        service("select garden_finish_payroll_report($1,$2,$3,$4) v", [
+          next.report.id,
+          next.report.render_token,
+          "a".repeat(64),
+          2000,
+        ]),
+        /not confirmed/,
+      );
+    },
+  );
+  await t.test(
+    "delivery reservations prevent duplicate sends, distinguish uncertain results and recheck recipient and account state",
+    async () => {
+      await assert.rejects(
+        service("select garden_begin_report_delivery($1,$2,$3,false,false) v", [
+          hr,
+          reportId,
+          randomUUID(),
+        ]),
+        /Connect.*Gmail/,
+      );
+      await db.query(
+        "insert into garden_payroll_mail_connection(sender,encrypted_token,connected_by) values('theplaymakers2026@gmail.com','FICTIONAL encrypted token',$1)",
+        [owner],
+      );
+      const connection = await value(
+        "select version v from garden_payroll_mail_connection",
+      );
+      const attempt = randomUUID();
+      const begin = (id, resend = false, ack = false) =>
+        service("select garden_begin_report_delivery($1,$2,$3,$4,$5) v", [
+          hr,
+          reportId,
+          id,
+          resend,
+          ack,
+        ]);
+      assert.equal((await begin(attempt)).claimed, true);
+      assert.equal((await begin(attempt)).claimed, false);
+      await assert.rejects(begin(randomUUID()), /already in progress/);
+      await db.query("update garden_profiles set active=false where id=$1", [
+        hr,
+      ]);
+      await assert.rejects(
+        service("select garden_dispatch_report_delivery($1,$2) v", [
+          attempt,
+          connection,
+        ]),
+        (e) => e.code === "42501",
+      );
+      await db.query("update garden_profiles set active=true where id=$1", [
+        hr,
+      ]);
+      await service("select garden_dispatch_report_delivery($1,$2) v", [
+        attempt,
+        connection,
+      ]);
+      await service("select garden_finish_report_delivery($1,$2,$3,$4) v", [
+        attempt,
+        "sent",
+        "fictional-gmail-id",
+        null,
+      ]);
+      assert.equal((await begin(attempt)).delivery.status, "sent");
+      await assert.rejects(begin(randomUUID()), /explicit resend/);
+      const uncertain = randomUUID();
+      await begin(uncertain, true);
+      await service("select garden_dispatch_report_delivery($1,$2) v", [
+        uncertain,
+        connection,
+      ]);
+      await service("select garden_finish_report_delivery($1,$2,$3,$4) v", [
+        uncertain,
+        "unconfirmed",
+        null,
+        "network_unknown",
+      ]);
+      await assert.rejects(begin(randomUUID(), true), /acknowledge/);
+      const retry = randomUUID();
+      assert.equal((await begin(retry, true, true)).claimed, true);
+      await service("select garden_finish_report_delivery($1,$2,$3,$4) v", [
+        retry,
+        "failed",
+        null,
+        "preflight_failed",
+      ]);
+      await db.query(
+        "update garden_employees set email='changed@example.invalid' where id=$1",
+        [eid],
+      );
+      await assert.rejects(begin(randomUUID(), true, true), /email changed/);
+      await db.query("update garden_employees set email=$1 where id=$2", [
+        `${user}@example.invalid`,
+        eid,
+      ]);
+      const stale = randomUUID();
+      await begin(stale, true, true);
+      await db.query(
+        "update garden_payroll_deliveries set updated_at=now()-interval '3 minutes',status='sending' where id=$1",
+        [stale],
+      );
+      const history = await as(hr, () =>
+        value("select garden_payroll_report_history($1) v", [payrollId]),
+      );
+      assert.equal(
+        history.find((r) => r.id === reportId).deliveries[0].status,
+        "unconfirmed",
+      );
+      await db.exec("delete from garden_payroll_mail_connection");
+      await assert.rejects(begin(randomUUID(), true, true), /Connect.*Gmail/);
+    },
+  );
+  await t.test(
+    "Gmail connection requires a claimed owner state and Disconnect cancels callbacks already in flight",
+    async () => {
+      const save = (state) =>
+        service("select garden_connect_payroll_mail($1,$2) v", [
+          state,
+          "FICTIONAL ciphertext",
+        ]);
+      const state = randomUUID();
+      await db.query(
+        "insert into garden_payroll_oauth_state(state_hash,actor_id,encrypted_verifier,expires_at) values($1,$2,'FICTIONAL verifier',now()+interval '10 minutes')",
+        [state, owner],
+      );
+      await assert.rejects(save(state), /expired or was cancelled/);
+      await db.query(
+        "update garden_payroll_oauth_state set used=true where state_hash=$1",
+        [state],
+      );
+      await save(state);
+      await assert.rejects(save(state), /expired or was cancelled/);
+      await assert.rejects(
+        service("select garden_disconnect_payroll_mail($1) v", [hr]),
+        (e) => e.code === "42501",
+      );
+      const pending = randomUUID();
+      await db.query(
+        "insert into garden_payroll_oauth_state(state_hash,actor_id,encrypted_verifier,expires_at,used) values($1,$2,'FICTIONAL verifier',now()+interval '10 minutes',true)",
+        [pending, owner],
+      );
+      const old = await service("select garden_disconnect_payroll_mail($1) v", [
+        owner,
+      ]);
+      assert.equal(old.connected, true);
+      await assert.rejects(save(pending), /expired or was cancelled/);
+      assert.equal(
+        await value(
+          "select count(*)::int v from garden_payroll_mail_connection",
+        ),
+        0,
+      );
+      const nonOwner = randomUUID();
+      await db.query(
+        "insert into garden_payroll_oauth_state(state_hash,actor_id,encrypted_verifier,expires_at,used) values($1,$2,'FICTIONAL verifier',now()+interval '10 minutes',true)",
+        [nonOwner, hr],
+      );
+      await assert.rejects(save(nonOwner), (e) => e.code === "42501");
+    },
+  );
+  await t.test(
+    "private payroll PDFs remain inaccessible through Storage even with unrelated broad policies",
+    async () => {
+      assert.equal(
+        await value(
+          "select public v from storage.buckets where id='garden-payroll-reports'",
+        ),
+        false,
+      );
+      await db.exec(
+        "insert into storage.objects(bucket_id) values('garden-payroll-reports'),('unrelated-bucket')",
+      );
+      for (const id of [owner, user, viewer, finance])
+        await as(id, async () => {
+          assert.equal(
+            (
+              await db.query(
+                "select * from storage.objects where bucket_id='garden-payroll-reports'",
+              )
+            ).rows.length,
+            0,
+          );
+          assert.equal(
+            (
+              await db.query(
+                "select * from storage.objects where bucket_id='unrelated-bucket'",
+              )
+            ).rows.length,
+            1,
+          );
+          await assert.rejects(
+            db.query(
+              "insert into storage.objects(bucket_id) values('garden-payroll-reports')",
+            ),
+            (e) => e.code === "42501",
+          );
+        });
     },
   );
   await db.close();

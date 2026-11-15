@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   outputFileTracingIncludes: {
     "/api/team/timesheets": ["./public/fonts/*", "./public/brand/*"],
+    "/api/team/payroll-reports": ["./public/fonts/*", "./public/brand/*"],
   },
 };
 

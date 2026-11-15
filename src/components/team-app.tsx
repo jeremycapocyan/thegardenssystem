@@ -31,6 +31,8 @@ import { TimesheetsPanel } from "./timesheets-panel";
 import { EmployeePinPanel } from "./employee-pin-panel";
 import { PayrollCutoffSummary } from "./payroll-cutoff-summary";
 import { PayrollCutoffSettings } from "./payroll-cutoff-settings";
+import { PayrollGmailSettings } from "./payroll-gmail-settings";
+import { PayrollReportDialog } from "./payroll-report-dialog";
 import { canManage, canViewFinance } from "@/lib/access";
 import { csv, displayDate, money, todayInManila } from "@/lib/finance";
 import {
@@ -99,6 +101,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   const [periodReference, setPeriod] = useState(todayInManila());
   const period = employeePeriod(periodReference, team.data.cutoff_rules);
   const [selected, setSelected] = useState("");
+  const [reportPayrollId, setReportPayrollId] = useState("");
   const [pay, setPay] = useState<PayrollPreview | null>(null),
     [payLoading, setPayLoading] = useState(false);
   const [editor, setEditor] = useState<TeamEditor | null>(null);
@@ -151,10 +154,26 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   const unlinked = data.employees.filter((e) => !e.profile_id).length;
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
+    if (admin && query.has("mail")) {
+      setTab("cutoffs");
+      setNotice(
+        query.get("mail") === "connected"
+          ? "Payroll Gmail connected. HR admins can now send finalized reports."
+          : query.get("mail") === "wrong_sender"
+            ? "Choose theplaymakers2026@gmail.com when connecting Gmail."
+            : "Gmail was not connected. Check Google consent and the owner setup, then retry.",
+      );
+      query.delete("mail");
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + (query.size ? `?${query}` : ""),
+      );
+    }
     if (query.get("court")) setCourt(query.get("court") || "");
     if (employeeRole && query.get("setup") === "pin") setTab("pin");
     else if (scan || query.get("clock") === "1") setTab("scan");
-  }, [scan, employeeRole]);
+  }, [scan, employeeRole, admin]);
   useEffect(() => {
     if (ws.mode === "demo") setPeriod(demoTeam().attendance[0].work_date);
   }, [ws.mode]);
@@ -855,11 +874,14 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                 <TimesheetsPanel data={data} period={period} employeeId={eid} />
               )}
               {tab === "cutoffs" && admin && (
-                <PayrollCutoffSettings
-                  rules={data.cutoff_rules}
-                  onSaved={team.refresh}
-                  onDemoSave={team.changeDemoCutoffs}
-                />
+                <>
+                  <PayrollCutoffSettings
+                    rules={data.cutoff_rules}
+                    onSaved={team.refresh}
+                    onDemoSave={team.changeDemoCutoffs}
+                  />
+                  <PayrollGmailSettings />
+                </>
               )}
               {tab === "pin" && employeeRole && employee && (
                 <EmployeePinPanel
@@ -1006,6 +1028,12 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                   data={data}
                   period={period}
                   onEmployee={setSelected}
+                  onReport={(id) => {
+                    const p = data.payroll.find(
+                      (p) => p.employee_id === id && p.period_start === period,
+                    );
+                    if (p) setReportPayrollId(p.id);
+                  }}
                 />
               )}
               {(tab === "attendance" || tab === "payroll") &&
@@ -1065,6 +1093,17 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                 </p>
                               </div>
                               <div className="staff-actions">
+                                {admin && statement && (
+                                  <button
+                                    className="button primary compact"
+                                    onClick={() =>
+                                      setReportPayrollId(statement.id)
+                                    }
+                                  >
+                                    <Download size={15} />
+                                    Generate finalized report
+                                  </button>
+                                )}
                                 <button
                                   className="button secondary compact"
                                   onClick={exportPayroll}
@@ -1871,6 +1910,14 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         />
       )}
       {scanner && <CourtScanner onClose={() => setScanner(false)} />}
+      {admin && reportPayrollId && (
+        <PayrollReportDialog
+          key={reportPayrollId}
+          payrollId={reportPayrollId}
+          data={data}
+          onClose={() => setReportPayrollId("")}
+        />
+      )}
       {notice && (
         <div className="toast" role="status">
           <Check size={17} />

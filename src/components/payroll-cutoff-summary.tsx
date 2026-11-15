@@ -10,10 +10,12 @@ export function PayrollCutoffSummary({
   data,
   period,
   onEmployee,
+  onReport,
 }: {
   data: TeamData;
   period: string;
   onEmployee: (id: string) => void;
+  onReport: (id: string) => void;
 }) {
   const ws = useWorkspace(),
     [report, setReport] = useState<CutoffSummary | null>(null),
@@ -157,6 +159,14 @@ export function PayrollCutoffSummary({
                       >
                         View payroll
                       </button>
+                      {e.finalized && (
+                        <button
+                          className="text-button"
+                          onClick={() => onReport(e.employee_id)}
+                        >
+                          Generate finalized report
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
