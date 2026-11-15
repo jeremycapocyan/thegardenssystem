@@ -1,4 +1,4 @@
-import { addMonths, monthStart, toDate } from "./finance";
+import { addDays, toDate } from "./finance";
 import {
   employeePeriod,
   previewPayroll,
@@ -92,11 +92,9 @@ export function demoTimesheetReport(
           periods: TimesheetEmployee["periods"] = [],
           warnings: string[] = [];
         for (
-          let cutoff = employeePeriod(start);
+          let cutoff = employeePeriod(start, data.cutoff_rules);
           cutoff <= end;
-          cutoff = cutoff.endsWith("-01")
-            ? `${cutoff.slice(0, 7)}-16`
-            : addMonths(monthStart(cutoff), 1)
+          cutoff = addDays(payrollEnd(cutoff, data.cutoff_rules), 1)
         ) {
           const frozen = data.payroll.find(
               (p) => p.employee_id === e.id && p.period_start === cutoff,
@@ -105,7 +103,7 @@ export function demoTimesheetReport(
               frozen?.snapshot || previewPayroll(data, e.id, cutoff, now);
           periods.push({
             start: cutoff,
-            end: payrollEnd(cutoff),
+            end: frozen?.period_end || payrollEnd(cutoff, data.cutoff_rules),
             finalized: !!frozen,
           });
           for (const day of snapshot.days)

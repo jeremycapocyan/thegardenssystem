@@ -1,4 +1,5 @@
-import { addDays, monthEnd, todayInManila, toDate } from "./finance";
+import { addDays, todayInManila, toDate } from "./finance";
+import { payrollBounds, type CutoffRule } from "./payroll-periods";
 
 export interface Employee {
   id: string;
@@ -115,6 +116,7 @@ export interface Payroll {
   finalized_at: string;
 }
 export interface TeamData {
+  cutoff_rules?: CutoffRule[];
   employees: Employee[];
   schedules: Schedule[];
   overrides: ScheduleOverride[];
@@ -140,10 +142,10 @@ export const emptyTeam = (): TeamData => ({
 });
 export const TEAM_DEMO_STORE = "gardens.team.sample.v1";
 export const DEMO_EMPLOYEE = "a1000000-0000-4000-8000-000000000001";
-export const employeePeriod = (date: string) =>
-  `${date.slice(0, 7)}-${Number(date.slice(8)) <= 15 ? "01" : "16"}`;
-export const payrollEnd = (start: string) =>
-  start.slice(8) === "01" ? `${start.slice(0, 7)}-15` : monthEnd(start);
+export const employeePeriod = (date: string, rules?: CutoffRule[]) =>
+  payrollBounds(date, rules).start;
+export const payrollEnd = (start: string, rules?: CutoffRule[]) =>
+  payrollBounds(start, rules).end;
 export const manilaInput = (timestamp: string) =>
   new Date(new Date(timestamp).valueOf() + 8 * 3600000)
     .toISOString()
@@ -185,7 +187,7 @@ export function previewPayroll(
 ): PayrollPreview {
   const employee = data.employees.find((e) => e.id === eid);
   if (!employee) throw Error("Select an employee.");
-  const end = payrollEnd(start);
+  const end = payrollEnd(start, data.cutoff_rules);
   const days: PayrollDay[] = [];
   const blockers: string[] = [];
   if (
@@ -352,12 +354,13 @@ export function previewPayroll(
 }
 export function demoTeam(): TeamData {
   const data = emptyTeam();
+  data.cutoff_rules = [
+    { effective_from: "2000-01-01", first_day: 15, second_day: 31 },
+    { effective_from: "2026-11-01", first_day: 12, second_day: 28 },
+  ];
   const today = todayInManila();
-  const start = employeePeriod(today);
-  const lastPeriod =
-    Number(start.slice(8)) === 16
-      ? `${start.slice(0, 7)}-01`
-      : employeePeriod(addDays(start, -1));
+  const start = employeePeriod(today, data.cutoff_rules);
+  const lastPeriod = employeePeriod(addDays(start, -1), data.cutoff_rules);
   data.employees = [
     {
       id: DEMO_EMPLOYEE,
@@ -390,7 +393,11 @@ export function demoTeam(): TeamData {
   }));
   const workDays = Array.from({ length: 15 }, (_, i) =>
     addDays(lastPeriod, i),
-  ).filter((d) => d <= payrollEnd(lastPeriod) && toDate(d).getUTCDay() !== 0);
+  ).filter(
+    (d) =>
+      d <= payrollEnd(lastPeriod, data.cutoff_rules) &&
+      toDate(d).getUTCDay() !== 0,
+  );
   data.attendance = workDays.slice(0, 3).map((d, i) => ({
     id: `att-${i}`,
     employee_id: DEMO_EMPLOYEE,

@@ -31,7 +31,7 @@ export function TimesheetsPanel({
     [preset, setPreset] = useState("payroll"),
     [reference, setReference] = useState(period);
   const [from, setFrom] = useState(period),
-    [to, setTo] = useState(payrollEnd(period)),
+    [to, setTo] = useState(payrollEnd(period, data.cutoff_rules)),
     [report, setReport] = useState<TimesheetReport | null>(null);
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -41,13 +41,16 @@ export function TimesheetsPanel({
         ? from
         : preset === "month"
           ? monthStart(reference)
-          : employeePeriod(reference),
+          : employeePeriod(reference, data.cutoff_rules),
     end =
       preset === "custom"
         ? to
         : preset === "month"
           ? monthEnd(reference)
-          : payrollEnd(employeePeriod(reference));
+          : payrollEnd(
+              employeePeriod(reference, data.cutoff_rules),
+              data.cutoff_rules,
+            );
   useEffect(() => {
     let active = true;
     setReport(null);
@@ -194,7 +197,7 @@ export function TimesheetsPanel({
                 setPreset(e.target.value);
               }}
             >
-              <option value="payroll">Semi-monthly payroll period</option>
+              <option value="payroll">Payroll cutoff period</option>
               <option value="month">Calendar month</option>
               <option value="custom">Custom dates (up to 31 days)</option>
             </select>

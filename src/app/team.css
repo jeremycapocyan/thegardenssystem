@@ -530,3 +530,65 @@
     padding: 18px 12px;
   }
 }
+.cutoff-summary {
+  margin-bottom: 28px;
+}
+.cutoff-total {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: right;
+}
+.cutoff-total strong {
+  font-size: 30px;
+  color: var(--burgundy);
+}
+.cutoff-total small,
+.cutoff-note {
+  color: var(--muted);
+}
+.cutoff-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  padding: 0 24px;
+}
+.cutoff-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cutoff-metrics strong {
+  font-size: 20px;
+}
+.cutoff-note {
+  padding: 18px 24px;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.cutoff-settings {
+  display: block;
+}
+.cutoff-settings form {
+  margin: 25px 0;
+}
+.cutoff-settings form > p {
+  margin: 18px 0;
+  line-height: 1.7;
+}
+.cutoff-settings details {
+  margin-top: 24px;
+  line-height: 1.8;
+}
+@media (max-width: 640px) {
+  .cutoff-summary .panel-heading {
+    flex-direction: column;
+    gap: 18px;
+  }
+  .cutoff-total {
+    text-align: left;
+  }
+  .cutoff-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

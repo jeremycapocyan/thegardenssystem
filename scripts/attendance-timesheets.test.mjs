@@ -454,5 +454,141 @@ test("Private PIN attendance and timesheet database reports", async (t) => {
       assert.equal(future.days[0].status, "Upcoming");
     },
   );
+  await t.test(
+    "cutoff totals are HR-only and include all employees, frozen earnings and partial salary payments",
+    async () => {
+      for (const id of [user, other, viewer, finance, manager])
+        await as(id, () =>
+          assert.rejects(
+            db.query("select garden_payroll_cutoff_summary('2020-01-01')"),
+            (e) => e.code === "42501",
+          ),
+        );
+      await as(
+        "",
+        () =>
+          assert.rejects(
+            db.query("select garden_payroll_cutoff_summary('2020-01-01')"),
+            (e) => e.code === "42501",
+          ),
+        "anon",
+      );
+      const summary = () =>
+        as(hr, () =>
+          value("select garden_payroll_cutoff_summary('2020-01-01') v"),
+        );
+      let r = await summary();
+      assert.equal(r.employees.length, 2);
+      assert.equal(r.totals.gross_cents, 134062);
+      assert.equal(r.totals.finalized_count, 1);
+      assert.equal(r.totals.draft_count, 1);
+      const p = await value(
+        "select id v from garden_payroll where employee_id=$1",
+        [eid],
+      );
+      await command(owner, "pay", {
+        id: randomUUID(),
+        payroll_id: p,
+        amount_cents: 50000,
+        paid_on: "2020-02-01",
+        reference: "Test partial salary",
+      });
+      r = await summary();
+      assert.equal(r.totals.paid_cents, 50000);
+      assert.equal(r.totals.balance_cents, 84062);
+      assert.equal(r.totals.payable_cents, 134062);
+      await as(hr, () =>
+        assert.rejects(
+          db.query("select garden_payroll_cutoff_summary('2026-11-15')"),
+          /cutoff period/,
+        ),
+      );
+      await assert.rejects(
+        db.query(
+          "insert into garden_payroll(employee_id,period_start,period_end,snapshot,gross_cents,recovery_cents,payable_cents) values($1,'2020-01-02','2020-01-03','{}',0,0,0)",
+          [eid],
+        ),
+        (e) => e.code === "23P01",
+      );
+    },
+  );
+  await t.test(
+    "configurable cutoff dates agree with reports, protect finalized periods and reject unauthorized changes",
+    async () => {
+      const b = await value("select garden_payroll_bounds('2026-11-15') v");
+      assert.equal(b.start, "2026-11-13");
+      assert.equal(b.end, "2026-11-28");
+      assert.equal(
+        (await value("select garden_payroll_bounds('2028-02-29') v")).end,
+        "2028-03-12",
+      );
+      const reportRange = await report(hr, "2026-11-10", "2026-11-15");
+      assert.equal(reportRange.employees[0].periods.length, 2);
+      assert.equal(reportRange.employees[0].days.length, 6);
+      const snap = await as(user, () =>
+        value("select garden_team_snapshot() v"),
+      );
+      assert.equal(snap.cutoff_rules.at(-1).first_day, 12);
+      for (const id of [user, viewer, finance, manager])
+        await as(id, () =>
+          assert.rejects(
+            db.query(
+              "select garden_change_payroll_cutoffs('2099-01-29',10,25,'Test schedule')",
+            ),
+            (e) => e.code === "42501",
+          ),
+        );
+      await as(user, () =>
+        assert.rejects(
+          db.query(
+            "insert into garden_payroll_cutoffs(effective_from,first_day,second_day,reason) values('2099-01-29',10,25,'Forged')",
+          ),
+          (e) => e.code === "42501",
+        ),
+      );
+      await db.query(
+        "insert into garden_payroll(employee_id,period_start,period_end,snapshot,gross_cents,recovery_cents,payable_cents) values($1,'2099-01-29','2099-02-12','{}',0,0,0)",
+        [otherEid],
+      );
+      await as(hr, () =>
+        assert.rejects(
+          db.query(
+            "select garden_change_payroll_cutoffs('2099-01-29',10,25,'Test schedule')",
+          ),
+          /Finalized payroll/,
+        ),
+      );
+      await db.query(
+        "delete from garden_payroll where employee_id=$1 and period_start='2099-01-29'",
+        [otherEid],
+      );
+      await as(hr, () =>
+        db.query(
+          "select garden_change_payroll_cutoffs('2099-01-29',10,25,'Test schedule')",
+        ),
+      );
+      assert.equal(
+        (await value("select garden_payroll_bounds('2099-01-30') v")).end,
+        "2099-02-10",
+      );
+      assert.equal(
+        (await value("select garden_payroll_bounds('2099-01-28') v")).end,
+        "2099-01-28",
+      );
+      await as(hr, () =>
+        assert.rejects(
+          db.query(
+            "select garden_change_payroll_cutoffs('2099-02-01',12,28,'Bad boundary')",
+          ),
+          /start of a current or future/,
+        ),
+      );
+      assert.equal(
+        (await report(hr, "2020-01-02", "2020-01-02")).employees[0].totals
+          .gross_cents,
+        73125,
+      );
+    },
+  );
   await db.close();
 });

@@ -17,6 +17,7 @@ import {
 } from "@/lib/team";
 import { useWorkspace } from "./workspace-provider";
 import { canManage } from "@/lib/access";
+import type { CutoffRule } from "@/lib/payroll-periods";
 
 export function useTeam() {
   const ws = useWorkspace();
@@ -56,6 +57,7 @@ export function useTeam() {
         )
           initial = stored;
       } catch {}
+      initial.cutoff_rules ??= demoTeam().cutoff_rules;
       setData(initial);
       setLoading(false);
       setError("");
@@ -376,5 +378,20 @@ export function useTeam() {
     if (result.error) throw Error(friendlyError(result.error));
     return result.data;
   }
-  return { data, loading, error, refresh, command, preview };
+  function changeDemoCutoffs(rule: CutoffRule) {
+    if (ws.mode !== "demo" || !canManage(ws.profile, "team"))
+      throw Error("Employee and payroll management permission required.");
+    if (data.payroll.some((p) => p.period_end >= rule.effective_from))
+      throw Error(
+        "Finalized payroll is locked. Choose a later effective date.",
+      );
+    commit({
+      ...data,
+      cutoff_rules: [
+        ...(data.cutoff_rules || demoTeam().cutoff_rules || []),
+        rule,
+      ],
+    });
+  }
+  return { data, loading, error, refresh, command, preview, changeDemoCutoffs };
 }

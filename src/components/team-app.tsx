@@ -29,6 +29,8 @@ import { TeamDialog, type TeamEditor } from "./team-dialog";
 import { CourtScanner } from "./court-scanner";
 import { TimesheetsPanel } from "./timesheets-panel";
 import { EmployeePinPanel } from "./employee-pin-panel";
+import { PayrollCutoffSummary } from "./payroll-cutoff-summary";
+import { PayrollCutoffSettings } from "./payroll-cutoff-settings";
 import { canManage, canViewFinance } from "@/lib/access";
 import { csv, displayDate, money, todayInManila } from "@/lib/finance";
 import {
@@ -48,6 +50,7 @@ type Tab =
   | "requests"
   | "payroll"
   | "timesheets"
+  | "cutoffs"
   | "pin"
   | "qr"
   | "scan";
@@ -93,7 +96,8 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
   const admin = canManage(ws.profile, "team"),
     employeeRole = ws.profile?.role === "employee";
   const [tab, setTab] = useState<Tab>(scan ? "scan" : "overview");
-  const [period, setPeriod] = useState(employeePeriod(todayInManila()));
+  const [periodReference, setPeriod] = useState(todayInManila());
+  const period = employeePeriod(periodReference, team.data.cutoff_rules);
   const [selected, setSelected] = useState("");
   const [pay, setPay] = useState<PayrollPreview | null>(null),
     [payLoading, setPayLoading] = useState(false);
@@ -152,8 +156,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
     else if (scan || query.get("clock") === "1") setTab("scan");
   }, [scan, employeeRole]);
   useEffect(() => {
-    if (ws.mode === "demo")
-      setPeriod(employeePeriod(demoTeam().attendance[0].work_date));
+    if (ws.mode === "demo") setPeriod(demoTeam().attendance[0].work_date);
   }, [ws.mode]);
   useEffect(() => {
     if (
@@ -381,6 +384,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         { id: "timesheets", label: "Timesheets", icon: ClipboardCheck },
         { id: "requests", label: "Requests & advances", icon: ClipboardCheck },
         { id: "payroll", label: "Payroll", icon: Wallet },
+        { id: "cutoffs", label: "Payroll settings", icon: CalendarDays },
         { id: "qr", label: "Court QR & settings", icon: QrCode },
       ]
     : [
@@ -602,22 +606,27 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                 tab !== "qr" &&
                 tab !== "scan" &&
                 tab !== "timesheets" &&
+                tab !== "cutoffs" &&
                 tab !== "pin" && (
                   <section className="staff-controls">
                     <label className="field">
-                      <span>Payroll period</span>
+                      <span>Payroll cutoff period</span>
                       <input
                         type="date"
                         aria-label="Payroll period reference"
                         value={period}
+                        onInput={(event) => {
+                          if (event.currentTarget.value)
+                            setPeriod(event.currentTarget.value);
+                        }}
                         onChange={(event) => {
-                          if (event.target.value)
-                            setPeriod(employeePeriod(event.target.value));
+                          if (event.target.value) setPeriod(event.target.value);
                         }}
                       />
                     </label>
                     <span>
-                      {displayDate(period)} — {displayDate(payrollEnd(period))}
+                      {displayDate(period)} —{" "}
+                      {displayDate(payrollEnd(period, data.cutoff_rules))}
                     </span>
                     {admin && (
                       <label className="field">
@@ -839,6 +848,13 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
               {tab === "timesheets" && admin && (
                 <TimesheetsPanel data={data} period={period} employeeId={eid} />
               )}
+              {tab === "cutoffs" && admin && (
+                <PayrollCutoffSettings
+                  rules={data.cutoff_rules}
+                  onSaved={team.refresh}
+                  onDemoSave={team.changeDemoCutoffs}
+                />
+              )}
               {tab === "pin" && employeeRole && employee && (
                 <EmployeePinPanel
                   employee={employee}
@@ -978,6 +994,13 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     )}
                   </div>
                 </section>
+              )}
+              {tab === "payroll" && admin && (
+                <PayrollCutoffSummary
+                  data={data}
+                  period={period}
+                  onEmployee={setSelected}
+                />
               )}
               {(tab === "attendance" || tab === "payroll") &&
                 (!employee ? (
