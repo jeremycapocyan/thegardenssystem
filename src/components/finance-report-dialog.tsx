@@ -87,6 +87,15 @@ export function FinanceReportDialog({ onClose }: { onClose: () => void }) {
           generated_at: new Date().toISOString(),
           prepared_by: ws.profile?.display_name || "Sample workspace",
         };
+        const savedBalances = JSON.parse(
+          localStorage.getItem("gardens.balances.sample.v1") || "null",
+        );
+        if (
+          savedBalances &&
+          Array.isArray(savedBalances.allocations) &&
+          Array.isArray(savedBalances.movements)
+        )
+          source.balances = savedBalances;
       } else {
         if (ws.mode !== "live" || !navigator.onLine)
           throw Error(

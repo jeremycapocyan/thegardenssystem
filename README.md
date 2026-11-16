@@ -130,6 +130,14 @@ Live generation calls the read-only `garden_finance_report_snapshot` RPC so fina
 
 Period cash uses actual collection/payment dates. Owner payouts are separate from business expenses. Monthly owner entitlements use the entire calendar month's recorded net; payouts match their settlement month through the as-of date. Bill/installment balances and cumulative ROI use the as-of date independently of the selected cash range. Screen category/search filters do not exclude records from the complete PDF. Apply `202611160001_finance_reports.sql` alongside the existing migrations; no new secrets or dependencies are required. Generate a local fictional example with `npx tsx scripts/sample-finance-report.ts`.
 
+## Cash, bank and booking balances
+
+Open **Cash & balances**. A finance admin enters actual opening cash, bank and withdrawable booking funds at the start of one date. The initial setup is immutable; later corrections use dated movements with a reason. Existing finance records are preserved and initially unassigned. Viewers can inspect balances and exports; employee and non-finance roles have no access.
+
+Use **Assign account** to allocate an existing income, expense or owner payout, including linked payroll expenses. Partial amounts support split receipts/payments; database locking caps the total at the source entry. The funds date records when money actually became available or was paid, so pending booking receipts can be assigned later without backdating availability. Parent edits cannot reduce amounts below assignments or move dates past them; deletion removes the linked assignments. Balances include all assigned movements since opening through the as-of date, while the period controls filter the displayed transaction lists. Unassigned receipts/payments and negative balances are prominently flagged.
+
+Use **Record fund movement → Transfer** for booking withdrawals to bank or bank-to-cash transfers. These preserve combined funds and never change profit. Fees are recorded once in Expenses and assigned to the account that paid them. Outside funding and reasoned corrections affect balances only; record capital separately in ROI when applicable. The booking balance is manually maintained, excludes pending/unavailable funds, and has no bank/platform connection. CSV exports and the complete finance PDF include account balances, assignments and fund movements. Apply additive migration `202611170001_cash_balances.sql`; no additional secrets are needed.
+
 ## Verification
 
 The automated suite covers peso precision, date/week/month boundaries, actual payment dates, owner rounding/losses, late settlements, overpayments, partial/final/completed installments, month-end due dates, CSV escaping, and database security. PGlite executes the production SQL migration and verifies admin/viewer/outsider policies, immutable membership roles, bill-version overlaps, transaction rollback, audit permissions, and snapshots exceeding 1,000 records.

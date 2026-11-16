@@ -60,6 +60,7 @@ import { canManage, canViewFinance } from "@/lib/access";
 import { AccountSettings, RestrictedWorkspace } from "./account-settings";
 import { RoiTracker } from "./roi-tracker";
 import { FinanceReportDialog } from "./finance-report-dialog";
+import { CashBalances } from "./cash-balances";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -89,9 +90,20 @@ const navigation = [
     icon: Users,
   },
   { view: "roi", href: "/roi/", label: "ROI tracker", icon: TrendingUp },
+  {
+    view: "balances",
+    href: "/balances/",
+    label: "Cash & balances",
+    icon: Wallet,
+  },
   { view: "settings", href: "/settings/", label: "Settings", icon: Settings2 },
 ] as const;
 const headings: Record<View, { title: string; subtitle: string }> = {
+  balances: {
+    title: "Cash & account balances",
+    subtitle:
+      "Track cash on hand, bank funds, and your withdrawable booking balance.",
+  },
   dashboard: {
     title: "Your court, at a glance.",
     subtitle:
@@ -999,39 +1011,42 @@ export function FinanceApp({ view }: { view: View }) {
                   <span>Generate PDF report</span>
                 </button>
               )}
-              {view !== "settings" && view !== "roi" && (
+              {view !== "settings" && view !== "roi" && view !== "balances" && (
                 <button className="button secondary" onClick={download}>
                   <Download size={16} />
                   <span>Export CSV</span>
                 </button>
               )}
-              {admin && view !== "settings" && view !== "roi" && (
-                <button
-                  className="button primary"
-                  onClick={() =>
-                    edit(
-                      view === "dashboard"
-                        ? "income"
-                        : view === "bills"
-                          ? "bills"
-                          : view,
-                    )
-                  }
-                >
-                  <Plus size={18} />
-                  {view === "dashboard"
-                    ? "Record income"
-                    : view === "income"
+              {admin &&
+                view !== "settings" &&
+                view !== "roi" &&
+                view !== "balances" && (
+                  <button
+                    className="button primary"
+                    onClick={() =>
+                      edit(
+                        view === "dashboard"
+                          ? "income"
+                          : view === "bills"
+                            ? "bills"
+                            : view,
+                      )
+                    }
+                  >
+                    <Plus size={18} />
+                    {view === "dashboard"
                       ? "Record income"
-                      : view === "expenses"
-                        ? "Record payment"
-                        : view === "bills"
-                          ? "Add fixed bill"
-                          : view === "installments"
-                            ? "Add agreement"
-                            : "Record payout"}
-                </button>
-              )}
+                      : view === "income"
+                        ? "Record income"
+                        : view === "expenses"
+                          ? "Record payment"
+                          : view === "bills"
+                            ? "Add fixed bill"
+                            : view === "installments"
+                              ? "Add agreement"
+                              : "Record payout"}
+                  </button>
+                )}
             </div>
           </div>
           {(ws.error || (pageError && !deletion)) && (
@@ -1730,6 +1745,7 @@ export function FinanceApp({ view }: { view: View }) {
           )}
 
           {view === "roi" && <RoiTracker />}
+          {view === "balances" && <CashBalances />}
           {view === "settings" && (
             <>
               <AccountSettings />

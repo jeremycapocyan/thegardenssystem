@@ -3,6 +3,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { displayDate, displayMonth, money } from "./finance";
 import type { TimesheetPdfAssets } from "./timesheet-pdf";
 import type { FinanceReport } from "./finance-report";
+import { ACCOUNTS, type CashAccount } from "./balances";
 
 type Column = { label: string; weight: number; right?: boolean };
 type Row = { cells: string[]; total?: boolean };
@@ -874,6 +875,87 @@ export async function createFinanceReportPdf(
       r.warnings.map((w) => row(w)),
       "Flags do not change or exclude any transaction. Review the source records in the app.",
     );
+  }
+  if (r.balanceData) {
+    const settings = r.balanceData.settings,
+      b = r.balances;
+    if (settings && b?.available) {
+      table(
+        "Cash, bank and booking balances",
+        [
+          col("Account", 45),
+          col("Opening balance", 25, true),
+          col("Recorded balance", 30, true),
+        ],
+        Object.entries(ACCOUNTS)
+          .map(([id, label]) =>
+            row(
+              label,
+              money(settings[id as CashAccount]),
+              money(b.balances[id as CashAccount]),
+            ),
+          )
+          .concat([
+            { cells: ["TOTAL TRACKED FUNDS", "", money(b.total)], total: true },
+          ]),
+        `As of ${r.options.asOf}. Opening balances are at the start of ${settings.start_date}. Booking balance includes manually tracked withdrawable funds only. These balances are separate from business profit. Unassigned receipts ${money(b.unassignedIn)} and unassigned payments ${money(b.unassignedOut)} are excluded until assigned. Not a live bank or booking-system feed.`,
+      );
+      table(
+        "Account assignments through the as-of date",
+        [
+          col("Date", 12),
+          col("Finance entry", 28),
+          col("Received into / paid from", 32),
+          col("Amount", 18, true),
+          col("Direction", 10),
+        ],
+        b.entries.flatMap((e) =>
+          e.allocations.map((a) =>
+            row(
+              a.posted_on || e.date,
+              `${e.label}\n${e.reference || e.notes}`,
+              ACCOUNTS[a.account],
+              money(a.amount_cents),
+              e.kind === "income" ? "In" : "Out",
+            ),
+          ),
+        ),
+        "Each assignment links to an existing finance entry. Splits allocate a portion of that entry; they do not create additional income or expenses.",
+      );
+      table(
+        "Fund movements through the as-of date",
+        [
+          col("Date / type", 16),
+          col("From", 19),
+          col("To", 19),
+          col("Amount", 16, true),
+          col("Reference / reason", 30),
+        ],
+        r.balanceData.movements
+          .filter((m) => m.moved_on <= r.options.asOf)
+          .map((m) =>
+            row(
+              `${m.moved_on}\n${m.kind}`,
+              m.from_account ? ACCOUNTS[m.from_account] : "Outside funds",
+              m.to_account ? ACCOUNTS[m.to_account] : "Outside funds",
+              money(m.amount_cents),
+              `${m.reference || "-"}\n${m.reason}`,
+            ),
+          ),
+        "Transfers preserve combined tracked funds. Funding and corrections change balances only; recorded business income, expenses, ROI and owner shares remain unchanged.",
+      );
+    } else
+      table(
+        "Cash, bank and booking balances",
+        [col("Status", 100)],
+        [
+          row(
+            settings
+              ? "The selected as-of date is before the opening date."
+              : "Opening balances have not been configured. Historical finance records are unassigned; no cash or bank balance has been assumed.",
+          ),
+        ],
+      );
   }
   const pages = doc.getPages();
   pages.forEach((p, i) => {

@@ -1,5 +1,6 @@
 import type { Dataset, Period } from "./types";
 import type { RoiData } from "./roi";
+import { cashSummary, type CashData } from "./balances";
 import { roiSummary } from "./roi";
 import {
   addDays,
@@ -22,6 +23,7 @@ export interface FinanceReportOptions {
   period: Period | "custom";
 }
 export interface FinanceReportSource {
+  balances?: Omit<CashData, "finance">;
   finance: Dataset;
   roi: RoiData;
   generated_at: string;
@@ -214,6 +216,10 @@ export function buildFinanceReport(
       : [];
   });
   return structuredClone({
+    balances: source.balances
+      ? cashSummary({ ...source.balances, finance: data }, asOf)
+      : null,
+    balanceData: source.balances || null,
     options,
     sample,
     generatedAt: source.generated_at,
