@@ -9,6 +9,7 @@ export type View =
   | "installments"
   | "payouts"
   | "roi"
+  | "balances"
   | "settings";
 export type PaymentKind = "operating" | "fixed" | "installment";
 
