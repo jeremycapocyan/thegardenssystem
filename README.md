@@ -122,6 +122,14 @@ Authenticated APIs are under `/api/team/payroll-reports/` (generate/list), `/{id
 
 `npx tsx scripts/sample-payroll-report.ts` writes a fictional example under the parent workspace's `output/pdf/` and a local layout stress test under `tmp/pdfs/`. Neither contacts Supabase or Gmail.
 
+## Finance PDF reports
+
+Finance admins and viewers can choose **Generate PDF report** on the finance screens. Select a day, Monday–Sunday week, calendar month, or custom range up to 366 days, plus an as-of date for obligations and settlement payments. The report includes branded summaries and charts, category totals, daily cash movement, complete income/expense/payout ledgers, effective-dated bills, installment terms and balances, full-month owner settlements, and capital/ROI with supporting contribution and adjustment records. All amounts use Philippine pesos and embedded Noto Serif fonts; tables repeat headers and paginate long notes.
+
+Live generation calls the read-only `garden_finance_report_snapshot` RPC so finance and ROI use one database snapshot without the per-query row limit. Only active finance members can call it. Employee, HR-only, account-only, disabled and anonymous accounts cannot export; private HR and payslip data are excluded. Generating a report does not change records, close a period, create an expense or send an email. Preview and download use the same generated file. Later changes require generating another PDF. The sample workspace uses fictional browser-local records.
+
+Period cash uses actual collection/payment dates. Owner payouts are separate from business expenses. Monthly owner entitlements use the entire calendar month's recorded net; payouts match their settlement month through the as-of date. Bill/installment balances and cumulative ROI use the as-of date independently of the selected cash range. Screen category/search filters do not exclude records from the complete PDF. Apply `202611160001_finance_reports.sql` alongside the existing migrations; no new secrets or dependencies are required. Generate a local fictional example with `npx tsx scripts/sample-finance-report.ts`.
+
 ## Verification
 
 The automated suite covers peso precision, date/week/month boundaries, actual payment dates, owner rounding/losses, late settlements, overpayments, partial/final/completed installments, month-end due dates, CSV escaping, and database security. PGlite executes the production SQL migration and verifies admin/viewer/outsider policies, immutable membership roles, bill-version overlaps, transaction rollback, audit permissions, and snapshots exceeding 1,000 records.

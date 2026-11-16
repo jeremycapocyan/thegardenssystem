@@ -263,5 +263,58 @@ test("ROI capital ledger permissions and finance reconciliation", async (t) => {
       );
     },
   );
+  await t.test(
+    "complete finance report snapshot is read-only, untruncated and available only to active finance members",
+    async () => {
+      for (const actor of [admin, viewer]) {
+        const result = (
+          await as(actor, () =>
+            db.query("select garden_finance_report_snapshot() v"),
+          )
+        ).rows[0].v;
+        assert.equal(result.roi.capital.length, 1002);
+        assert.equal(
+          result.prepared_by,
+          actor === admin ? "Finance" : "Viewer",
+        );
+        assert(Number.isFinite(new Date(result.generated_at).valueOf()));
+        assert.equal(
+          result.finance.expenses.length,
+          (await db.query("select count(*)::int n from garden_expenses"))
+            .rows[0].n,
+        );
+        assert.equal(result.payroll, undefined);
+        assert.equal(result.employees, undefined);
+      }
+      for (const actor of [employee, hr, outsider])
+        await assert.rejects(
+          as(actor, () => db.query("select garden_finance_report_snapshot()")),
+          (e) => e.code === "42501",
+        );
+      await assert.rejects(
+        as(
+          null,
+          () => db.query("select garden_finance_report_snapshot()"),
+          "anon",
+        ),
+        (e) => e.code === "42501",
+      );
+      await db.query("update garden_profiles set active=false where id=$1", [
+        viewer,
+      ]);
+      await assert.rejects(
+        as(viewer, () => db.query("select garden_finance_report_snapshot()")),
+        (e) => e.code === "42501",
+      );
+      assert.equal(
+        (
+          await db.query(
+            "select provolatile from pg_proc where proname='garden_finance_report_snapshot'",
+          )
+        ).rows[0].provolatile,
+        "s",
+      );
+    },
+  );
   await db.close();
 });

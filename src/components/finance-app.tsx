@@ -14,6 +14,7 @@ import {
   CreditCard,
   Download,
   Eye,
+  FileText,
   Leaf,
   LoaderCircle,
   LogOut,
@@ -58,6 +59,7 @@ import { getBackend } from "@/lib/backend";
 import { canManage, canViewFinance } from "@/lib/access";
 import { AccountSettings, RestrictedWorkspace } from "./account-settings";
 import { RoiTracker } from "./roi-tracker";
+import { FinanceReportDialog } from "./finance-report-dialog";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -548,6 +550,7 @@ export function FinanceApp({ view }: { view: View }) {
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [resettingSamples, setResettingSamples] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -987,6 +990,15 @@ export function FinanceApp({ view }: { view: View }) {
               <p>{headings[view].subtitle}</p>
             </div>
             <div className="heading-actions">
+              {view !== "settings" && canViewFinance(ws.profile) && (
+                <button
+                  className="button secondary"
+                  onClick={() => setReportOpen(true)}
+                >
+                  <FileText size={16} />
+                  <span>Generate PDF report</span>
+                </button>
+              )}
               {view !== "settings" && view !== "roi" && (
                 <button className="button secondary" onClick={download}>
                   <Download size={16} />
@@ -1942,6 +1954,9 @@ export function FinanceApp({ view }: { view: View }) {
           </footer>
         </main>
       </div>
+      {reportOpen && canViewFinance(ws.profile) && (
+        <FinanceReportDialog onClose={() => setReportOpen(false)} />
+      )}
       {editor && (
         <RecordModal
           key={`${editor.kind}-${editor.record?.id || "new"}-${editor.revise ? "revise" : "edit"}`}

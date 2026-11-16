@@ -2814,3 +2814,75 @@ td > strong {
   padding: 20px 27px;
   margin-top: 0;
 }
+
+.finance-report-dialog {
+  max-width: 790px;
+}
+.finance-report-dialog .dialog-heading p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.finance-report-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.finance-report-fields input[readonly] {
+  background: var(--cream);
+}
+.finance-report-coverage {
+  margin: 21px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--cream);
+}
+.finance-report-coverage p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.finance-report-ready {
+  padding: 18px;
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  margin: 20px 0;
+}
+.finance-report-ready > strong {
+  font-size: 19px;
+}
+.finance-report-ready > p {
+  margin: 9px 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.finance-report-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 17px 0;
+}
+.finance-report-totals span {
+  font-size: 11px;
+}
+.finance-report-totals b {
+  display: block;
+  font-size: 17px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.finance-report-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 600px) {
+  .finance-report-fields,
+  .finance-report-totals {
+    grid-template-columns: 1fr;
+  }
+}
