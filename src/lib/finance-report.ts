@@ -1,5 +1,6 @@
 import type { Dataset, Period } from "./types";
 import type { RoiData } from "./roi";
+import { emptyPartnerCash, partnerCashSummary } from "./partner-cash";
 import {
   emptyPartners,
   partnerDebtBalances,
@@ -270,6 +271,13 @@ export function buildFinanceReport(
     (s) => s.month >= monthStart(start) && s.month <= monthStart(end),
   );
   return structuredClone({
+    partnerCash: data.partner_cash || emptyPartnerCash(),
+    partnerCashAdvances: (data.partner_cash?.advances || [])
+      .filter((a) => a.received_on <= asOf)
+      .map((a) => ({
+        ...a,
+        ...partnerCashSummary(data.partner_cash!, a, asOf),
+      })),
     partnerCapitalPositions,
     partnerPurchases,
     partnerDebts,

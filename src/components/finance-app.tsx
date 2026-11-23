@@ -63,6 +63,11 @@ import { FinanceReportDialog } from "./finance-report-dialog";
 import { CashBalances } from "./cash-balances";
 import { OndaImportDialog } from "./onda-import-dialog";
 import { PartnerAdvances, PartnerAdvanceSummary } from "./partner-advances";
+import {
+  PartnerCashAdvances,
+  PartnerCashSummary,
+} from "./partner-cash-advances";
+import { emptyPartnerCash, partnerCashCsvRows } from "@/lib/partner-cash";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -871,6 +876,14 @@ export function FinanceApp({ view }: { view: View }) {
           shares.Jeremy / 100,
         ],
       ];
+    if (view === "installments" || view === "dashboard")
+      rows.push(
+        [],
+        ...partnerCashCsvRows(
+          ws.data.partner_cash || emptyPartnerCash(),
+          ws.asOf,
+        ),
+      );
     const blob = new Blob([csv(rows)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -1563,6 +1576,7 @@ export function FinanceApp({ view }: { view: View }) {
 
           {view === "installments" && (
             <>
+              <PartnerCashAdvances />
               <PartnerAdvances section="purchases" month={month} />
               <div className="section-heading tracker-heading">
                 <div>
@@ -1799,7 +1813,12 @@ export function FinanceApp({ view }: { view: View }) {
             </>
           )}
 
-          {view === "dashboard" && <PartnerAdvanceSummary />}
+          {view === "dashboard" && (
+            <>
+              <PartnerCashSummary />
+              <PartnerAdvanceSummary />
+            </>
+          )}
           {view === "roi" && (
             <>
               <PartnerAdvanceSummary />

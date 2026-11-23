@@ -154,6 +154,13 @@ export function CashBalances() {
         posted_on: String(f.get("posted_on")),
       };
       validateCashAllocation(data, a);
+      if (
+        ws.mode === "demo" &&
+        ws.data.partner_cash?.spends.some(
+          (s) => s.allocation_id === a.id && !s.voided_at,
+        )
+      )
+        throw Error("Use Partner cash advances to correct this linked entry.");
       if (ws.mode === "demo")
         commit({
           ...data,
@@ -173,6 +180,13 @@ export function CashBalances() {
   }
   async function unassign(a: CashAllocation) {
     await mutate(async () => {
+      if (
+        ws.mode === "demo" &&
+        ws.data.partner_cash?.spends.some(
+          (s) => s.allocation_id === a.id && !s.voided_at,
+        )
+      )
+        throw Error("Use Partner cash advances to correct this linked entry.");
       if (ws.mode === "demo")
         commit({
           ...data!,

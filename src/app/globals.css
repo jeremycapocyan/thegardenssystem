@@ -2351,6 +2351,7 @@ td > strong {
   }
   .heading-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
   .heading-actions .button {
     flex: 1;
@@ -3237,6 +3238,12 @@ td > strong {
   background: var(--white);
   color: var(--ink);
 }
+.cash-advance-history { margin-top: 1.25rem; }
+.cash-advance-history summary { cursor: pointer; font-weight: 600; padding: .75rem 0; }
+#partner-cash-advances { scroll-margin-top: 5rem; }
+#partner-cash-advances .panel-heading { flex-wrap: wrap; gap: 1rem; }
+#partner-cash-advances .button-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+#partner-cash-advances .partner-actions { display: flex; gap: .5rem; flex-wrap: wrap; min-width: 10rem; }
 .onda-note-choice {
   display: flex;
   gap: 7px;

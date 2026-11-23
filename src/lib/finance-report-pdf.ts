@@ -751,6 +751,109 @@ export async function createFinanceReportPdf(
     `Each report month uses its ENTIRE calendar month's net income. Confirmed owner settlements use frozen shares and capital deductions; source changes require admin review. Still payable = gross entitlement less confirmed capital withholding less actual cash payouts through ${r.options.asOf}. Withholding retains funds in Gardens; it is not another expense or cash payment. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
   );
   table(
+    "Cash borrowed from partners — outstanding principal",
+    [
+      col("Partner / purpose", 25),
+      col("Received / account", 15),
+      col("Principal", 12, true),
+      col("Linked purchases", 12, true),
+      col("Repaid", 12, true),
+      col("Still owed", 12, true),
+      col("Next due / overdue", 18),
+    ],
+    r.partnerCashAdvances.map((a) =>
+      row(
+        a.owner + "\n" + a.purpose,
+        a.received_on +
+          "\n" +
+          (a.detail.to_account || "") +
+          "\n" +
+          a.detail.reference,
+        money(a.amount_cents),
+        money(a.spent),
+        money(a.repaid),
+        money(a.remaining),
+        a.voided_at
+          ? "Voided: " + a.void_reason
+          : (a.next || "Repaid") + "\n" + money(a.overdue) + " overdue",
+      ),
+    ),
+    `As of ${r.options.asOf}. Receipts and principal repayments affect account funds only. Purchases appear once in Expenses. Cash advances do not change capital or owner profit shares. Linked purchases document funding, not a separate cash balance.`,
+  );
+  table(
+    "Partner cash advance repayment terms",
+    [
+      col("Partner / purpose", 45),
+      col("First due", 15),
+      col("Monthly amount", 18, true),
+      col("Schedule", 22),
+    ],
+    r.partnerCashAdvances.map((a) =>
+      row(
+        a.owner + "\n" + a.purpose,
+        a.first_due,
+        money(a.monthly_cents),
+        a.monthly_cents === a.amount_cents
+          ? "Single due date"
+          : "Monthly; final payment adjusted",
+      ),
+    ),
+    "Partial and early repayments are supported. Scheduled days are clamped to month-end. Repayments settle the oldest due amounts first.",
+  );
+  table(
+    "Purchases linked to partner cash advances",
+    [
+      col("Partner / description", 30),
+      col("Paid on", 12),
+      col("Full expense", 14, true),
+      col("Advance-funded", 14, true),
+      col("Account / reference", 16),
+      col("Status", 14),
+    ],
+    r.partnerCash.spends
+      .filter((s) => s.detail.expense.paid_on <= r.options.asOf)
+      .map((s) =>
+        row(
+          (r.partnerCash.advances.find((a) => a.id === s.advance_id)?.owner ||
+            "") +
+            "\n" +
+            s.detail.expense.notes,
+          s.detail.expense.paid_on,
+          money(s.detail.expense.amount_cents),
+          money(s.amount_cents),
+          s.detail.allocation.account + "\n" + s.detail.expense.reference,
+          s.voided_at ? "Voided: " + s.void_reason : "Active",
+        ),
+      ),
+    "Funding portions are not additional expenses. Linking an existing purchase does not repost its expense or existing account assignment.",
+  );
+  table(
+    "Partner cash advance principal repayments",
+    [
+      col("Partner / purpose", 32),
+      col("Paid on", 13),
+      col("Amount", 15, true),
+      col("Account / reference", 22),
+      col("Status", 18),
+    ],
+    r.partnerCash.repayments
+      .filter((p) => p.paid_on <= r.options.asOf)
+      .map((p) =>
+        row(
+          (r.partnerCash.advances.find((a) => a.id === p.advance_id)?.owner ||
+            "") +
+            "\n" +
+            (r.partnerCash.advances.find((a) => a.id === p.advance_id)
+              ?.purpose || ""),
+          p.paid_on,
+          money(p.amount_cents),
+          (p.detail.from_account || "") + "\n" + p.detail.reference,
+          p.voided_at ? "Voided: " + p.void_reason : "Active",
+        ),
+      ),
+    "Principal repayments, including unused-fund returns, are separate from owner payouts and do not create expenses.",
+  );
+  table(
     "Partner-funded purchases — Gardens owes partners",
     [
       col("Purchase / agreement", 24),

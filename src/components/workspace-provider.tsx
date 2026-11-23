@@ -21,6 +21,7 @@ import { demoData, DEMO_REFERENCE, DEMO_AS_OF } from "@/lib/demo";
 import { todayInManila } from "@/lib/finance";
 import { canManage } from "@/lib/access";
 import { guardPartnerManual } from "@/lib/partners-demo";
+import { guardPartnerCashManual } from "@/lib/partner-cash-demo";
 import {
   EMPTY_DATA,
   type Collection,
@@ -311,6 +312,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       assertAdmin();
       if (mode === "demo") {
         guardPartnerManual(data, collection, values);
+        guardPartnerCashManual(data, collection, values.id);
         const items = data[collection] as unknown as Record<string, unknown>[];
         if (
           collection === "income" &&
@@ -340,6 +342,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await finishSave();
     },
     async remove(collection, id) {
+      if (mode === "demo") guardPartnerCashManual(data, collection, id);
       if (
         mode === "demo" &&
         (collection === "expenses" || collection === "installments")
