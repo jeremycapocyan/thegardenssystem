@@ -8,6 +8,7 @@ import {
   installmentSummary,
   monthStart,
   parseMoney,
+  parseIncomeMoney,
 } from "@/lib/finance";
 import {
   OWNERS,
@@ -146,7 +147,7 @@ export function RecordModal({
           id,
           business_date: get("date"),
           category_id: requiredCategory(),
-          amount_cents: parseMoney(get("amount")),
+          amount_cents: parseIncomeMoney(get("amount")),
           notes: get("notes"),
         };
       if (editor.kind === "expenses") {

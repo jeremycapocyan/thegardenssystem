@@ -235,7 +235,7 @@ export function CashBalances() {
       (e) =>
         e.date >= range.start &&
         e.date <= range.end &&
-        (!onlyUnassigned || e.unassigned > 0),
+        (!onlyUnassigned || e.unassigned !== 0),
     ) || [];
   const movements =
     data?.movements
@@ -259,6 +259,10 @@ export function CashBalances() {
       ]),
       ["Total tracked funds", report.total / 100],
       ["Unassigned receipts", report.unassignedIn / 100],
+      [
+        "Income refund corrections requiring manual account handling",
+        report.unassignedRefunds / 100,
+      ],
       ["Unassigned payments", report.unassignedOut / 100],
       [],
       [
@@ -432,14 +436,21 @@ export function CashBalances() {
                 <small>Cash + bank + withdrawable booking funds</small>
               </section>
             </div>
-            {(report.unassignedIn > 0 || report.unassignedOut > 0) && (
+            {(report.unassignedIn > 0 ||
+              report.unassignedOut > 0 ||
+              report.unassignedRefunds > 0) && (
               <div className="cash-warning" role="status">
                 <strong>Reconciliation needed</strong>
                 <p>
                   Unassigned receipts: {money(report.unassignedIn)} · Unassigned
-                  payments: {money(report.unassignedOut)} through{" "}
-                  {displayDate(asOf)}. These are excluded from account balances
-                  until assigned. Change the period above to find older entries.
+                  payments: {money(report.unassignedOut)} · Income refund
+                  corrections requiring manual cash handling:{" "}
+                  {money(report.unassignedRefunds)} through {displayDate(asOf)}.
+                  Receipts and payments are excluded from balances until
+                  assigned. Handle negative income with a dated account
+                  correction and a reason; do not add another expense. Refund
+                  corrections remain listed for review. Change the period above
+                  to find older entries.
                 </p>
               </div>
             )}
@@ -486,7 +497,9 @@ export function CashBalances() {
                           {displayDate(e.date)}
                           <small>
                             {e.kind === "income"
-                              ? "Receipt"
+                              ? e.amount < 0
+                                ? "Income refund correction"
+                                : "Receipt"
                               : e.kind === "payouts"
                                 ? "Owner payout"
                                 : "Expense payment"}

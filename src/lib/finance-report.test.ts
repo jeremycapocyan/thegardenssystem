@@ -322,3 +322,53 @@ test("finance PDF includes every section, embeds serif peso fonts and paginates 
   }
   assert.match(pdf.getTitle() || "", /Finance report/);
 });
+
+test("refund-only income stays negative in summaries, graphs, PDF and account warnings", async () => {
+  const s = source();
+  s.finance.income = [
+    {
+      id: "negative",
+      business_date: "2026-11-02",
+      category_id: "income-0",
+      amount_cents: -25000,
+      notes: "Cash return included in income; manual account handling required",
+    },
+  ];
+  s.finance.expenses = [];
+  s.finance.payouts = [];
+  const r = buildFinanceReport(
+    {
+      ...s,
+      balances: {
+        settings: { start_date: "2026-11-01", cash: 0, bank: 0, booking: 0 },
+        allocations: [],
+        movements: [],
+      },
+    },
+    options,
+    true,
+  );
+  assert.equal(r.cash.income, -25000);
+  assert.equal(r.cash.net, -25000);
+  assert.equal(r.cash.distributable, 0);
+  assert.equal(r.balances!.unassignedIn, 0);
+  assert.equal(r.balances!.unassignedRefunds, 25000);
+  const bytes = await createFinanceReportPdf(r, await loadTimesheetPdfAssets());
+  const pdf = await PDFDocument.load(bytes);
+  assert(pdf.getPageCount() > 3);
+  const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const task = getDocument({ data: bytes.slice(), verbosity: 0 });
+  try {
+    const doc = await task.promise;
+    let text = "";
+    for (let i = 1; i <= doc.numPages; i++)
+      text += (await (await doc.getPage(i)).getTextContent()).items
+        .map((x) => ("str" in x ? x.str : ""))
+        .join(" ");
+    assert.match(text, /-₱250\.00/);
+    assert.match(text, /Income refund corrections/);
+    assert.match(text, /manual account handling/);
+  } finally {
+    await task.destroy();
+  }
+});

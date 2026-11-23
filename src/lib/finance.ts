@@ -23,6 +23,12 @@ export function parseMoney(input: string): number {
     throw new Error("This amount is too large.");
   return cents;
 }
+export function parseIncomeMoney(input: string): number {
+  const value = input.trim();
+  return value.startsWith("-")
+    ? -parseMoney(value.slice(1))
+    : parseMoney(value);
+}
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 export function toDate(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value))

@@ -92,6 +92,7 @@ export function cashSummary(data: CashData, asOf: string) {
       entries: [],
       unassignedIn: 0,
       unassignedOut: 0,
+      unassignedRefunds: 0,
     };
   Object.assign(balances, {
     cash: opening.cash,
@@ -116,11 +117,14 @@ export function cashSummary(data: CashData, asOf: string) {
     available: true,
     entries,
     unassignedIn: entries
-      .filter((e) => e.kind === "income")
+      .filter((e) => e.kind === "income" && e.amount >= 0)
       .reduce((n, e) => n + e.unassigned, 0),
     unassignedOut: entries
       .filter((e) => e.kind !== "income")
       .reduce((n, e) => n + e.unassigned, 0),
+    unassignedRefunds: entries
+      .filter((e) => e.kind === "income" && e.amount < 0)
+      .reduce((n, e) => n + Math.abs(e.unassigned), 0),
   };
 }
 export function validateCashAllocation(data: CashData, a: CashAllocation) {

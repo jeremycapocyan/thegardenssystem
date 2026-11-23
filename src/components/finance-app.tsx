@@ -61,6 +61,7 @@ import { AccountSettings, RestrictedWorkspace } from "./account-settings";
 import { RoiTracker } from "./roi-tracker";
 import { FinanceReportDialog } from "./finance-report-dialog";
 import { CashBalances } from "./cash-balances";
+import { OndaImportDialog } from "./onda-import-dialog";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -563,6 +564,7 @@ export function FinanceApp({ view }: { view: View }) {
   const [deleting, setDeleting] = useState(false);
   const [resettingSamples, setResettingSamples] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [ondaOpen, setOndaOpen] = useState(false);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4200);
@@ -1002,6 +1004,15 @@ export function FinanceApp({ view }: { view: View }) {
               <p>{headings[view].subtitle}</p>
             </div>
             <div className="heading-actions">
+              {view === "income" && admin && (
+                <button
+                  className="button secondary"
+                  onClick={() => setOndaOpen(true)}
+                >
+                  <FileText size={16} />
+                  Upload Onda PDF
+                </button>
+              )}
               {view !== "settings" && canViewFinance(ws.profile) && (
                 <button
                   className="button secondary"
@@ -1972,6 +1983,9 @@ export function FinanceApp({ view }: { view: View }) {
       </div>
       {reportOpen && canViewFinance(ws.profile) && (
         <FinanceReportDialog onClose={() => setReportOpen(false)} />
+      )}
+      {ondaOpen && admin && (
+        <OndaImportDialog onClose={() => setOndaOpen(false)} />
       )}
       {editor && (
         <RecordModal

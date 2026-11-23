@@ -49,6 +49,7 @@ interface Workspace {
   signOut: () => Promise<void>;
   enterDemo: () => void;
   resetDemo: () => void;
+  commitDemoIncome: (rows: Dataset["income"]) => void;
   previewRole: (role: Role) => void;
   save: (
     collection: Collection,
@@ -270,6 +271,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("gardens.accounts.sample.v1");
       localStorage.removeItem("gardens.roi.sample.v1");
       localStorage.removeItem("gardens.balances.sample.v1");
+      localStorage.removeItem("gardens.onda.sample.v1");
       localStorage.removeItem("gardens.pin.sample.events.v1");
       window.dispatchEvent(new Event("gardens-demo-reset"));
     },
@@ -290,6 +292,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           team_access: role === "admin",
           manage_accounts: role === "admin",
         });
+    },
+    commitDemoIncome(rows) {
+      assertAdmin();
+      if (mode !== "demo")
+        throw Error("Sample imports are only available in the demo workspace.");
+      commitDemo({ ...data, income: rows });
     },
     async save(collection, values) {
       assertAdmin();

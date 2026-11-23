@@ -82,9 +82,9 @@ export function CashFlowChart({
             <g key={p.start}>
               <rect
                 x={x - barWidth - 1}
-                y={y(p.income)}
+                y={Math.min(zero, y(p.income))}
                 width={barWidth}
-                height={Math.max(0, zero - y(p.income))}
+                height={Math.abs(zero - y(p.income))}
                 rx={3}
                 fill="var(--burgundy)"
               >

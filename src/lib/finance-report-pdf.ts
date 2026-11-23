@@ -382,13 +382,26 @@ export async function createFinanceReportPdf(
     { name: "Business expenses", value: r.cash.expense, color: burgundy },
     { name: "Owner cash payouts", value: r.paidToOwners, color: navy },
   ];
+  const comparisonMin = Math.min(0, ...comparison.map((p) => p.value));
   const maximum = Math.max(1, ...comparison.map((p) => p.value));
+  const comparisonWidth = content - 280;
+  const comparisonX = (n: number) =>
+    margin +
+    140 +
+    (comparisonWidth * (n - comparisonMin)) / (maximum - comparisonMin);
+  page.drawLine({
+    start: { x: comparisonX(0), y: y + 12 },
+    end: { x: comparisonX(0), y: y - 64 },
+    thickness: 0.6,
+    color: gold,
+  });
+  text("0", comparisonX(0) - 2, y + 16, 7);
   for (const p of comparison) {
     text(p.name, margin, y, 9, true);
     page.drawRectangle({
-      x: margin + 140,
+      x: Math.min(comparisonX(0), comparisonX(p.value)),
       y: y - 3,
-      width: ((content - 280) * p.value) / maximum,
+      width: Math.abs(comparisonX(p.value) - comparisonX(0)),
       height: 13,
       color: p.color,
     });
@@ -898,7 +911,7 @@ export async function createFinanceReportPdf(
           .concat([
             { cells: ["TOTAL TRACKED FUNDS", "", money(b.total)], total: true },
           ]),
-        `As of ${r.options.asOf}. Opening balances are at the start of ${settings.start_date}. Booking balance includes manually tracked withdrawable funds only. These balances are separate from business profit. Unassigned receipts ${money(b.unassignedIn)} and unassigned payments ${money(b.unassignedOut)} are excluded until assigned. Not a live bank or booking-system feed.`,
+        `As of ${r.options.asOf}. Opening balances are at the start of ${settings.start_date}. Booking balance includes manually tracked withdrawable funds only. These balances are separate from business profit. Unassigned receipts ${money(b.unassignedIn)} and unassigned payments ${money(b.unassignedOut)} are excluded until assigned. Income refund corrections ${money(b.unassignedRefunds)} require manual account handling and are not offset against receipts. Not a live bank or booking-system feed.`,
       );
       table(
         "Account assignments through the as-of date",
