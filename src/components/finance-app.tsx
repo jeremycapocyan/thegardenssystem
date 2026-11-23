@@ -62,6 +62,7 @@ import { RoiTracker } from "./roi-tracker";
 import { FinanceReportDialog } from "./finance-report-dialog";
 import { CashBalances } from "./cash-balances";
 import { OndaImportDialog } from "./onda-import-dialog";
+import { PartnerAdvances, PartnerAdvanceSummary } from "./partner-advances";
 
 const navigation = [
   { view: "dashboard", href: "/", label: "Overview", icon: BarChart3 },
@@ -683,7 +684,18 @@ export function FinanceApp({ view }: { view: View }) {
     label: string,
     term?: Editor["term"],
   ) =>
-    record.staff_payment_id ? (
+    (kind === "installments" &&
+      ws.data.partners?.purchases.some((p) => p.id === record.id)) ||
+    (kind === "expenses" &&
+      ws.data.partners?.purchases.some(
+        (p) =>
+          p.id ===
+          ws.data.expenses.find((e) => e.id === record.id)?.installment_id,
+      )) ? (
+      <Link className="text-link" href="/installments/#partner-advances">
+        Partner advances
+      </Link>
+    ) : record.staff_payment_id ? (
       <span className="badge neutral">Payroll linked</span>
     ) : admin ? (
       <div className="row-actions">
@@ -817,6 +829,9 @@ export function FinanceApp({ view }: { view: View }) {
           "Owner",
           "Settlement month",
           "Entitlement (PHP)",
+          "Capital withheld (PHP)",
+          "Confirmed recovery rate (%)",
+          "Net entitlement (PHP)",
           "Paid (PHP)",
           "Balance (PHP)",
           "Status",
@@ -825,6 +840,9 @@ export function FinanceApp({ view }: { view: View }) {
           r.owner,
           month,
           r.entitlement / 100,
+          r.withheld / 100,
+          r.recoveryRateBps === null ? "" : r.recoveryRateBps / 100,
+          r.netEntitlement / 100,
           r.paid / 100,
           r.balance / 100,
           r.status,
@@ -1004,6 +1022,11 @@ export function FinanceApp({ view }: { view: View }) {
               <p>{headings[view].subtitle}</p>
             </div>
             <div className="heading-actions">
+              {(view === "installments" || view === "payouts") && (
+                <a className="button secondary" href="#partner-advances">
+                  Partner advances
+                </a>
+              )}
               {view === "income" && admin && (
                 <button
                   className="button secondary"
@@ -1215,7 +1238,7 @@ export function FinanceApp({ view }: { view: View }) {
                     <h2>Everyone’s share</h2>
                     <p>
                       {period === "monthly"
-                        ? "Monthly entitlement, before payouts."
+                        ? "Indicative share before capital deductions. Confirmed totals are in Owner payouts."
                         : "Indicative only. Final owner shares use the entire calendar month."}
                     </p>
                   </div>
@@ -1540,6 +1563,7 @@ export function FinanceApp({ view }: { view: View }) {
 
           {view === "installments" && (
             <>
+              <PartnerAdvances section="purchases" month={month} />
               <div className="section-heading tracker-heading">
                 <div>
                   <h2>Keep the finish line in sight.</h2>
@@ -1674,6 +1698,13 @@ export function FinanceApp({ view }: { view: View }) {
                 </div>
               )}
               <div className="settlement-grid">
+                {ownerBalances.some((o) => o.needsReview) && (
+                  <div className="error-box partner-month-warning">
+                    Recorded income or expenses changed after this month was
+                    confirmed. Owner shares and capital deductions still use the
+                    saved settlement. Review it in Partner advances.
+                  </div>
+                )}
                 {ownerBalances.map((o, i) => (
                   <section className="settlement-card" key={o.owner}>
                     <div className="settlement-owner">
@@ -1687,9 +1718,21 @@ export function FinanceApp({ view }: { view: View }) {
                       <Badge>{o.status}</Badge>
                     </div>
                     <div className="settlement-amount">
-                      <span>Monthly entitlement</span>
+                      <span>
+                        {o.confirmed
+                          ? "Confirmed gross entitlement"
+                          : "Monthly gross entitlement"}
+                      </span>
                       <strong>{money(o.entitlement)}</strong>
                     </div>
+                    {o.withheld > 0 && (
+                      <p className="partner-deduction">
+                        Capital withheld: <strong>{money(o.withheld)}</strong>
+                        <br />
+                        Net entitlement after deductions:{" "}
+                        <strong>{money(o.netEntitlement)}</strong>
+                      </p>
+                    )}
                     <div className="settlement-detail">
                       <span>
                         Paid to date<strong>{money(o.paid)}</strong>
@@ -1704,6 +1747,7 @@ export function FinanceApp({ view }: { view: View }) {
                   </section>
                 ))}
               </div>
+              <PartnerAdvances section="capital" month={month} />
               <section className="panel">
                 <div className="panel-heading">
                   <div>
@@ -1755,7 +1799,13 @@ export function FinanceApp({ view }: { view: View }) {
             </>
           )}
 
-          {view === "roi" && <RoiTracker />}
+          {view === "dashboard" && <PartnerAdvanceSummary />}
+          {view === "roi" && (
+            <>
+              <PartnerAdvanceSummary />
+              <RoiTracker />
+            </>
+          )}
           {view === "balances" && <CashBalances />}
           {view === "settings" && (
             <>

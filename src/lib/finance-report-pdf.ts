@@ -720,13 +720,15 @@ export async function createFinanceReportPdf(
     "Monthly owner settlement",
     [
       col("Calendar month", 14),
-      col("Owner", 12),
-      col("Full-month net", 14, true),
-      col("Share", 8, true),
-      col("Entitlement", 14, true),
-      col("Paid to date", 14, true),
-      col("Balance", 14, true),
-      col("Status", 13),
+      col("Owner", 10),
+      col("Full-month net", 13, true),
+      col("Share", 6, true),
+      col("Gross entitlement", 13, true),
+      col("Capital withheld", 13, true),
+      col("Recovery %", 8, true),
+      col("Cash paid", 12, true),
+      col("Still payable", 12, true),
+      col("Status", 11),
     ],
     r.ownerMonths.flatMap((m) =>
       m.owners.map((o) =>
@@ -736,13 +738,130 @@ export async function createFinanceReportPdf(
           money(m.net),
           `${o.share}%`,
           money(o.entitlement),
+          money(o.withheld),
+          o.recoveryRateBps === null
+            ? "-"
+            : (o.recoveryRateBps / 100).toFixed(2) + "%",
           money(o.paid),
           money(o.balance),
           o.status,
         ),
       ),
     ),
-    `Each report month uses its ENTIRE calendar month's recorded net income, even for a daily, weekly or custom report. Payouts are matched by settlement month through ${r.options.asOf}, including later payments. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
+    `Each report month uses its ENTIRE calendar month's net income. Confirmed owner settlements use frozen shares and capital deductions; source changes require admin review. Still payable = gross entitlement less confirmed capital withholding less actual cash payouts through ${r.options.asOf}. Withholding retains funds in Gardens; it is not another expense or cash payment. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
+  );
+  table(
+    "Partner-funded purchases — Gardens owes partners",
+    [
+      col("Purchase / agreement", 24),
+      col("Partner", 12),
+      col("Purchased", 12),
+      col("Agreed total", 13, true),
+      col("Reimbursed", 13, true),
+      col("Remaining", 13, true),
+      col("Next due / status", 18),
+    ],
+    r.partnerPurchases.map((v) =>
+      row(
+        v.agreement.name + "\n" + v.agreement.code,
+        v.owner,
+        v.purchased_on,
+        money(v.agreement.total_cents),
+        money(v.paid),
+        money(v.remaining),
+        (v.next || "Completed") + "\n" + v.status,
+      ),
+    ),
+    `Balances as of ${r.options.asOf}. Registering a purchase creates no expense. Actual reimbursements already appear once in installment expenses; do not deduct them again.`,
+  );
+  table(
+    "Capital supplier payments — separate from operating profit",
+    [
+      col("Supplier / purpose", 29),
+      col("Total", 15, true),
+      col("Paid on", 12),
+      col("Recovery starts", 12),
+      col("Account / reference", 20),
+      col("Status", 12),
+    ],
+    r.partnerFundings.map((f) =>
+      row(
+        f.supplier + "\n" + f.purpose,
+        money(f.total_cents),
+        f.funded_on || "Not paid",
+        f.start_month,
+        f.funding_detail
+          ? [f.funding_detail.account, f.funding_detail.reference]
+              .filter(Boolean)
+              .join("\n")
+          : "-",
+        f.state,
+      ),
+    ),
+    `Capital advances reduce account funds when paid. They do not reduce operating profit, create owner cash payouts or automatically increase ROI capital. Drafts move no money. Voided entries are corrections, not actual refunds.`,
+  );
+  table(
+    "Capital amounts owed by partners",
+    [
+      col("Partner", 12),
+      col("Purpose", 30),
+      col("Allocated", 15, true),
+      col("Recovered", 15, true),
+      col("Remaining", 15, true),
+      col("Funding status", 13),
+    ],
+    r.partnerDebts.map((d) =>
+      row(
+        d.owner,
+        d.funding.purpose,
+        money(d.amount_cents),
+        money(d.recovered),
+        money(d.remaining),
+        d.funding.state,
+      ),
+    ),
+    `Recoveries include active confirmed settlements effective through ${r.options.asOf}. Debts stay separate from amounts Gardens owes partners. Draft allocations are awaiting funding, not active debt.`,
+  );
+  table(
+    "Capital cash movement in the reporting period",
+    [col("Calculation", 70), col("Amount", 30, true)],
+    [
+      row("Business net after actual owner cash payouts", money(r.retained)),
+      row(
+        "Less: capital supplier payments (not operating expenses)",
+        money(r.partnerCapitalOut),
+      ),
+      {
+        cells: [
+          "AFTER OWNER PAYOUTS AND CAPITAL ADVANCES",
+          money(r.afterCapitalAdvances),
+        ],
+        total: true,
+      },
+    ],
+    "These are period movements, not an account balance. Withholding money from an owner share creates no extra cash receipt. Transfers, opening funds and other balance corrections remain in the account section.",
+  );
+  table(
+    "Owner settlement confirmation and correction history",
+    [
+      col("Month", 12),
+      col("Confirmed at (Manila)", 24),
+      col("Net used", 16, true),
+      col("Status", 12),
+      col("Correction reason", 36),
+    ],
+    r.partnerSettlements.map((s) =>
+      row(
+        s.month,
+        new Date(s.confirmed_at).toLocaleString("en-PH", {
+          timeZone: "Asia/Manila",
+        }),
+        money(s.net_cents),
+        s.reversed_at ? "Reversed" : "Confirmed",
+        s.reversal_reason || "-",
+      ),
+    ),
+    "Original statements remain immutable. Reversal restores their debt recovery without deleting owner cash payments. Replacements are separate confirmed versions.",
   );
   table(
     "Owner cash payout details",

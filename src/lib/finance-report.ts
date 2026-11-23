@@ -1,5 +1,10 @@
 import type { Dataset, Period } from "./types";
 import type { RoiData } from "./roi";
+import {
+  emptyPartners,
+  partnerDebtBalances,
+  activeOwnerSettlement,
+} from "./partners";
 import { cashSummary, type CashData } from "./balances";
 import { roiSummary } from "./roi";
 import {
@@ -134,11 +139,18 @@ export function buildFinanceReport(
         .reduce((n, e) => n + e.amount_cents, 0),
     };
   });
-  const ownerMonths = months.map((month) => ({
-    month,
-    ...totals(data, month, monthEnd(month)),
-    owners: settlements(data, month, asOf),
-  }));
+  const ownerMonths = months.map((month) => {
+    const current = totals(data, month, monthEnd(month)),
+      statement = activeOwnerSettlement(data, month);
+    return {
+      month,
+      ...current,
+      net: statement?.net_cents ?? current.net,
+      currentNet: current.net,
+      confirmed: !!statement,
+      owners: settlements(data, month, asOf),
+    };
+  });
   const daily = Array.from({ length }, (_, i) => {
     const date = addDays(start, i),
       total = totals(data, date, date),
@@ -148,6 +160,14 @@ export function buildFinanceReport(
     return { date, ...total, ownerPaid, retained: total.net - ownerPaid };
   });
   const warnings: string[] = [];
+  for (const m of ownerMonths)
+    if (
+      m.confirmed &&
+      (m.net !== m.currentNet || m.owners.some((o) => o.needsReview))
+    )
+      warnings.push(
+        `${m.month}: confirmed owner settlement uses frozen net ${m.net / 100}; current recorded net is ${m.currentNet / 100}. Admin review is required; saved capital deductions remain unchanged.`,
+      );
   const unknown = new Set(
     [...income, ...expenses]
       .filter((r) => !data.categories.some((c) => c.id === r.category_id))
@@ -215,7 +235,39 @@ export function buildFinanceReport(
       ? [{ ...x, expense }]
       : [];
   });
+  const partners = data.partners || emptyPartners();
+  const partnerPurchases = partners.purchases
+    .filter((v) => v.purchased_on <= asOf)
+    .flatMap((v) => {
+      const agreement = data.installments.find((a) => a.id === v.id);
+      return agreement
+        ? [{ ...v, agreement, ...installmentSummary(data, agreement, asOf) }]
+        : [];
+    });
+  const partnerDebts = partnerDebtBalances(partners, asOf).filter((d) =>
+    d.funding.funded_on
+      ? d.funding.funded_on <= asOf
+      : d.funding.start_month <= asOf,
+  );
+  const partnerFundings = partners.fundings.filter((f) =>
+    f.funded_on ? f.funded_on <= asOf : f.start_month <= asOf,
+  );
+  const partnerCapitalOut = partners.fundings
+    .filter(
+      (f) =>
+        f.state === "funded" && f.funded_on && inRange(f.funded_on, start, end),
+    )
+    .reduce((n, f) => n + f.total_cents, 0);
+  const partnerSettlements = partners.settlements.filter(
+    (s) => s.month >= monthStart(start) && s.month <= monthStart(end),
+  );
   return structuredClone({
+    partnerPurchases,
+    partnerDebts,
+    partnerFundings,
+    partnerCapitalOut,
+    partnerSettlements,
+    afterCapitalAdvances: cash.net - paidToOwners - partnerCapitalOut,
     balances: source.balances
       ? cashSummary({ ...source.balances, finance: data }, asOf)
       : null,

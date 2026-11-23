@@ -1,3 +1,4 @@
+import type { PartnerData } from "./partners";
 export type Role = "admin" | "viewer" | "employee";
 export type Owner = "Genesis" | "Ken" | "Jeremy";
 export type Period = "daily" | "weekly" | "monthly";
@@ -92,6 +93,7 @@ export interface AuditEvent {
   occurred_at: string;
 }
 export interface Dataset {
+  partners?: PartnerData;
   categories: Category[];
   income: Income[];
   expenses: Expense[];

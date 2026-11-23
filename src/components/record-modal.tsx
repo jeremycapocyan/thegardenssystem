@@ -363,7 +363,12 @@ export function RecordModal({
                   <option value="">Choose an agreement</option>
                   {(paymentKind === "fixed"
                     ? ws.data.bills
-                    : ws.data.installments
+                    : ws.data.installments.filter(
+                        (a) =>
+                          !ws.data.partners?.purchases.some(
+                            (p) => p.id === a.id,
+                          ),
+                      )
                   ).map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name} · {item.code}

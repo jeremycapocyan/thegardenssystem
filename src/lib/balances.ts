@@ -25,7 +25,7 @@ export interface CashAllocation {
 export interface CashMovement {
   id: string;
   moved_on: string;
-  kind: "transfer" | "funding" | "adjustment";
+  kind: "transfer" | "funding" | "adjustment" | "partner_capital";
   from_account: CashAccount | null;
   to_account: CashAccount | null;
   amount_cents: number;

@@ -20,6 +20,7 @@ import {
 import { demoData, DEMO_REFERENCE, DEMO_AS_OF } from "@/lib/demo";
 import { todayInManila } from "@/lib/finance";
 import { canManage } from "@/lib/access";
+import { guardPartnerManual } from "@/lib/partners-demo";
 import {
   EMPTY_DATA,
   type Collection,
@@ -50,6 +51,7 @@ interface Workspace {
   enterDemo: () => void;
   resetDemo: () => void;
   commitDemoIncome: (rows: Dataset["income"]) => void;
+  commitDemoFinance: (data: Dataset) => void;
   previewRole: (role: Role) => void;
   save: (
     collection: Collection,
@@ -299,9 +301,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         throw Error("Sample imports are only available in the demo workspace.");
       commitDemo({ ...data, income: rows });
     },
+    commitDemoFinance(next) {
+      assertAdmin();
+      if (mode !== "demo")
+        throw Error("Sample changes require the demo workspace.");
+      commitDemo(next);
+    },
     async save(collection, values) {
       assertAdmin();
       if (mode === "demo") {
+        guardPartnerManual(data, collection, values);
         const items = data[collection] as unknown as Record<string, unknown>[];
         if (
           collection === "income" &&
@@ -331,6 +340,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await finishSave();
     },
     async remove(collection, id) {
+      if (
+        mode === "demo" &&
+        (collection === "expenses" || collection === "installments")
+      )
+        guardPartnerManual(data, collection, { id });
       assertAdmin();
       if (mode === "demo") {
         if (collection === "bills") {

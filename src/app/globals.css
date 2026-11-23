@@ -2998,6 +2998,128 @@ td > strong {
   max-width: 1120px;
   padding: 0;
 }
+
+.partner-panel {
+  scroll-margin-top: 24px;
+}
+.partner-panel > .table-scroll,
+.partner-panel > details,
+.partner-review {
+  margin: 16px 0;
+}
+.partner-panel small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.partner-panel .data-table td {
+  vertical-align: top;
+}
+.partner-panel .data-table .text-button {
+  display: block;
+  margin-bottom: 8px;
+}
+.partner-subheading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 28px 0 16px;
+}
+.partner-subheading p,
+.partner-help {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.partner-review {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+}
+.partner-summary {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  align-items: center;
+  gap: 24px;
+}
+.partner-summary strong {
+  display: block;
+  font-size: 26px;
+  margin: 8px 0;
+}
+.partner-summary a {
+  color: var(--burgundy);
+  font-size: 13px;
+}
+.partner-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.partner-fields .wide {
+  grid-column: 1 / -1;
+}
+.partner-allocation > div {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+  margin: 18px 0;
+}
+.partner-allocation > div > label:first-child,
+.partner-check {
+  display: flex;
+  align-items: start;
+  gap: 9px;
+  line-height: 1.6;
+}
+.partner-dialog input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  accent-color: var(--burgundy);
+  margin-top: 3px;
+}
+.partner-allocation > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.partner-wide {
+  max-width: 1100px;
+}
+.partner-deduction {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  line-height: 1.8;
+  font-size: 13px;
+  color: var(--muted);
+}
+.partner-month-warning {
+  grid-column: 1 / -1;
+}
+@media (max-width: 700px) {
+  .partner-summary {
+    grid-template-columns: 1fr;
+  }
+  .partner-subheading,
+  .partner-panel > .panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .partner-panel .heading-actions {
+    flex-wrap: wrap;
+  }
+  .partner-allocation > div {
+    grid-template-columns: 1fr;
+  }
+  .partner-review {
+    padding: 12px;
+  }
+}
 .onda-header {
   display: flex;
   justify-content: space-between;

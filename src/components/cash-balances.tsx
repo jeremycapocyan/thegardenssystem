@@ -594,7 +594,11 @@ export function CashBalances() {
                     {movements.map((m) => (
                       <tr key={m.id}>
                         <td>{displayDate(m.moved_on)}</td>
-                        <td>{m.kind}</td>
+                        <td>
+                          {m.kind === "partner_capital"
+                            ? "Partner capital advance"
+                            : m.kind}
+                        </td>
                         <td>
                           {m.from_account
                             ? ACCOUNTS[m.from_account]

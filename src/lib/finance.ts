@@ -264,6 +264,16 @@ export function settlements(data: Dataset, month: string, asOf: string) {
   const result = totals(data, monthStart(month), monthEnd(month));
   const shares = ownerShares(result.net);
   return (["Genesis", "Ken", "Jeremy"] as const).map((owner) => {
+    const statement = data.partners?.settlements.find(
+      (s) => s.month === monthStart(month) && !s.reversed_at,
+    );
+    const frozen = statement?.snapshot.owners.find((o) => o.owner === owner);
+    const entitlement = frozen?.entitlement ?? shares[owner];
+    const needsReview =
+      !!statement &&
+      (!!statement.needs_review || statement.net_cents !== result.net);
+    const withheld =
+      statement && monthEnd(month) <= asOf ? frozen?.withheld || 0 : 0;
     const paid = data.payouts
       .filter(
         (p) =>
@@ -272,14 +282,25 @@ export function settlements(data: Dataset, month: string, asOf: string) {
           p.paid_on <= asOf,
       )
       .reduce((sum, p) => sum + p.amount_cents, 0);
-    const balance = shares[owner] - paid;
+    const balance = entitlement - paid - withheld;
     return {
       owner,
       share: owner === "Jeremy" ? 20 : 40,
-      entitlement: shares[owner],
+      entitlement,
+      withheld,
+      recoveryRateBps: frozen?.rate_bps ?? null,
+      netEntitlement: entitlement - withheld,
+      confirmed: !!statement,
+      needsReview,
       paid,
       balance,
-      status: balance < 0 ? "Overpaid" : balance === 0 ? "Settled" : "Unpaid",
+      status: needsReview
+        ? "Review required"
+        : balance < 0
+          ? "Overpaid"
+          : balance === 0
+            ? "Settled"
+            : "Unpaid",
     };
   });
 }
