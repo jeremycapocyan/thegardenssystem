@@ -20,6 +20,7 @@ import {
   toDate,
   totals,
 } from "./finance";
+import { capitalPositions } from "./capital-equality";
 
 export interface FinanceReportOptions {
   start: string;
@@ -236,6 +237,13 @@ export function buildFinanceReport(
       : [];
   });
   const partners = data.partners || emptyPartners();
+  const partnerCapitalPositions = capitalPositions(
+    {
+      ...partners,
+      capital_contributions: roi.capital,
+    },
+    asOf,
+  );
   const partnerPurchases = partners.purchases
     .filter((v) => v.purchased_on <= asOf)
     .flatMap((v) => {
@@ -262,6 +270,7 @@ export function buildFinanceReport(
     (s) => s.month >= monthStart(start) && s.month <= monthStart(end),
   );
   return structuredClone({
+    partnerCapitalPositions,
     partnerPurchases,
     partnerDebts,
     partnerFundings,

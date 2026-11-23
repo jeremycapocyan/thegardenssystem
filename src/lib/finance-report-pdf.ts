@@ -823,6 +823,26 @@ export async function createFinanceReportPdf(
     `Recoveries include active confirmed settlements effective through ${r.options.asOf}. Debts stay separate from amounts Gardens owes partners. Draft allocations are awaiting funding, not active debt.`,
   );
   table(
+    "Genesis and Ken — total credited capital",
+    [
+      col("Partner", 12),
+      col("Recorded contributions", 22, true),
+      col("Repaid from shares", 22, true),
+      col("Still Gardens-funded", 22, true),
+      col("Total credited capital", 22, true),
+    ],
+    r.partnerCapitalPositions.map((p) =>
+      row(
+        p.owner,
+        money(p.recorded_cents),
+        money(p.repaid_cents),
+        money(p.outstanding_cents),
+        money(p.credited_cents),
+      ),
+    ),
+    `As of ${r.options.asOf}. Total credited capital = recorded contributions plus capital originally funded by Gardens. Repayments reclassify the funding source without crediting capital twice. Outstanding amounts remain repayable. Original ROI cash-contribution records are not rewritten. Equalization drafts take effect only when the supplier payment is recorded.`,
+  );
+  table(
     "Capital cash movement in the reporting period",
     [col("Calculation", 70), col("Amount", 30, true)],
     [

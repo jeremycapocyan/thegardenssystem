@@ -1,5 +1,9 @@
 import { monthStart, monthEnd, ownerShares, totals } from "./finance";
 import { OWNERS, type Dataset, type Owner } from "./types";
+import type {
+  CapitalContribution,
+  CapitalEqualization,
+} from "./capital-equality";
 
 export interface PartnerPurchase {
   id: string;
@@ -23,6 +27,7 @@ export interface PartnerPayment {
   created_at?: string;
 }
 export interface PartnerFunding {
+  capital_equalization?: CapitalEqualization | null;
   id: string;
   supplier: string;
   purpose: string;
@@ -79,7 +84,7 @@ export interface PartnerPreview {
   needs_review: boolean;
 }
 export interface OwnerSettlement {
-  needs_review?:boolean;
+  needs_review?: boolean;
   id: string;
   month: string;
   net_cents: number;
@@ -91,6 +96,7 @@ export interface OwnerSettlement {
   reversal_reason?: string;
 }
 export interface PartnerData {
+  capital_contributions?: CapitalContribution[];
   purchases: PartnerPurchase[];
   payments: PartnerPayment[];
   fundings: PartnerFunding[];

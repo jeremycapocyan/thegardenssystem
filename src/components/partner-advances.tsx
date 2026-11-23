@@ -21,7 +21,14 @@ import {
   installmentSummary,
   csv,
 } from "@/lib/finance";
-import { OWNERS, type Owner } from "@/lib/types";
+import { OWNERS, type Dataset } from "@/lib/types";
+import { demoRoi } from "@/lib/roi";
+import {
+  capitalPositions,
+  previewCapitalEqualization,
+  CAPITAL_PARTNERS,
+  type CapitalEqualization,
+} from "@/lib/capital-equality";
 import { ACCOUNTS, demoCash, type CashData } from "@/lib/balances";
 import {
   emptyPartners,
@@ -43,6 +50,75 @@ type FormKind =
   | "reverse_settlement";
 type OpenForm = { kind: FormKind; record?: string; preview?: PartnerPreview };
 const BALANCES = "gardens.balances.sample.v1";
+function demoCapital(data: Dataset): Dataset {
+  let capital = demoRoi().capital;
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem("gardens.roi.sample.v1") || "null",
+    );
+    if (Array.isArray(saved?.capital)) capital = saved.capital;
+  } catch {}
+  return {
+    ...data,
+    partners: {
+      ...(data.partners || emptyPartners()),
+      capital_contributions: capital.map(
+        ({ id, owner, invested_on, amount_cents }) => ({
+          id,
+          owner,
+          invested_on,
+          amount_cents,
+        }),
+      ),
+    },
+  };
+}
+function CapitalPositionTable({ data, asOf }: { data: Dataset; asOf: string }) {
+  const rows = capitalPositions(data.partners || emptyPartners(), asOf),
+    gap = Math.abs(rows[0].credited_cents - rows[1].credited_cents);
+  return (
+    <div className="partner-capital-position">
+      <h3>Genesis and Ken · total credited capital</h3>
+      <p className={gap ? "partner-help" : "notice"}>
+        {gap
+          ? `Current capital difference: ${money(gap)}. A new capital advance covers this difference first, then raises both partners to an equal total.`
+          : "Genesis and Ken have equal total credited capital."}
+      </p>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Partner</th>
+              <th>Recorded contributions</th>
+              <th>Repaid from shares</th>
+              <th>Still Gardens-funded</th>
+              <th>Total credited capital</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.owner}>
+                <td>{r.owner}</td>
+                <td>{money(r.recorded_cents)}</td>
+                <td>{money(r.repaid_cents)}</td>
+                <td>{money(r.outstanding_cents)}</td>
+                <td>
+                  <strong>{money(r.credited_cents)}</strong>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="partner-help">
+        Credited capital includes funds Gardens has paid on a partner’s behalf.
+        The outstanding advance stays repayable. Repayments change the funding
+        source without crediting capital twice. Original ROI cash-contribution
+        records remain unchanged.
+      </p>
+    </div>
+  );
+}
 function Field({
   label,
   children,
@@ -75,7 +151,8 @@ const titles: Record<FormKind, string> = {
 };
 export function PartnerAdvanceSummary() {
   const ws = useWorkspace(),
-    p = ws.data.partners || emptyPartners(),
+    data = ws.mode === "demo" ? demoCapital(ws.data) : ws.data,
+    p = data.partners || emptyPartners(),
     debts = partnerDebtBalances(p, ws.asOf),
     owed = p.purchases.reduce((n, v) => {
       const a = ws.data.installments.find((a) => a.id === v.id);
@@ -86,7 +163,12 @@ export function PartnerAdvanceSummary() {
           : 0)
       );
     }, 0);
-  if (!p.purchases.length && !p.fundings.length) return null;
+  if (
+    !p.purchases.length &&
+    !p.fundings.length &&
+    !p.capital_contributions?.length
+  )
+    return null;
   return (
     <section className="panel partner-summary">
       <div>
@@ -107,6 +189,7 @@ export function PartnerAdvanceSummary() {
           View capital recovery
         </Link>
       </div>
+      <CapitalPositionTable data={data} asOf={ws.asOf} />
     </section>
   );
 }
@@ -118,7 +201,8 @@ export function PartnerAdvances({
   month: string;
 }) {
   const ws = useWorkspace(),
-    p = ws.data.partners || emptyPartners(),
+    data = ws.mode === "demo" ? demoCapital(ws.data) : ws.data,
+    p = data.partners || emptyPartners(),
     admin = canManage(ws.profile, "finance");
   const [form, setForm] = useState<OpenForm | null>(null),
     [busy, setBusy] = useState(false),
@@ -144,7 +228,7 @@ export function PartnerAdvances({
     if (!admin) throw Error("Finance management permission required.");
     if (ws.mode === "demo") {
       const next = applyPartnerDemo(
-        ws.data,
+        data,
         balances(),
         action,
         id,
@@ -182,7 +266,7 @@ export function PartnerAdvances({
     try {
       if (!admin) throw Error("Finance management permission required.");
       if (ws.mode === "demo")
-        setPreview(previewPartnerSettlement(ws.data, month, today));
+        setPreview(previewPartnerSettlement(data, month, today));
       else {
         const r = await getBackend()!.rpc("garden_partner_preview", {
           p_month: month,
@@ -198,6 +282,16 @@ export function PartnerAdvances({
       working.current = false;
       setBusy(false);
     }
+  }
+  async function calculateCapital(total: number): Promise<CapitalEqualization> {
+    if (!admin) throw Error("Finance management permission required.");
+    if (ws.mode === "demo") return previewCapitalEqualization(p, total, today);
+    if (!navigator.onLine) throw Error("Reconnect before calculating capital.");
+    const result = await getBackend()!.rpc("garden_partner_equalization", {
+      p_total: total,
+    });
+    if (result.error) throw Error(friendlyError(result.error));
+    return result.data;
   }
   useEffect(() => {
     setPreview(null);
@@ -282,6 +376,24 @@ export function PartnerAdvances({
               ]),
             ),
           ];
+    if (section === "capital")
+      rows.push(
+        [],
+        [
+          "Partner",
+          "Recorded contributions PHP",
+          "Repaid from shares PHP",
+          "Still Gardens-funded PHP",
+          "Total credited capital PHP",
+        ],
+        ...capitalPositions(p, ws.asOf).map((r) => [
+          r.owner,
+          r.recorded_cents / 100,
+          r.repaid_cents / 100,
+          r.outstanding_cents / 100,
+          r.credited_cents / 100,
+        ]),
+      );
     const url = URL.createObjectURL(
       new Blob([csv(rows)], { type: "text/csv;charset=utf-8" }),
     );
@@ -297,7 +409,7 @@ export function PartnerAdvances({
     setBusy(true);
     setError("");
     try {
-      let data = ws.data,
+      let data = demoCapital(ws.data),
         cash = balances();
       if (!cash.settings)
         cash.settings = {
@@ -559,6 +671,7 @@ export function PartnerAdvances({
         </>
       ) : (
         <>
+          <CapitalPositionTable data={data} asOf={ws.asOf} />
           <div className="table-scroll">
             <table className="data-table">
               <thead>
@@ -576,6 +689,12 @@ export function PartnerAdvances({
                     <td>
                       <strong>{f.supplier}</strong>
                       <small>{f.purpose}</small>
+                      {f.capital_equalization && (
+                        <small>
+                          Equal-capital target:{" "}
+                          {money(f.capital_equalization.target_cents)} each
+                        </small>
+                      )}
                     </td>
                     <td>{money(f.total_cents)}</td>
                     <td>
@@ -822,6 +941,7 @@ export function PartnerAdvances({
           today={today}
           month={month}
           command={command}
+          calculateCapital={calculateCapital}
           onClose={() => setForm(null)}
           onSaved={async () => {
             setForm(null);
@@ -879,6 +999,7 @@ function PartnerForm({
   today,
   month,
   command,
+  calculateCapital,
   onClose,
   onSaved,
 }: {
@@ -890,6 +1011,7 @@ function PartnerForm({
     id: string,
     payload: Record<string, unknown>,
   ) => Promise<unknown>;
+  calculateCapital: (total: number) => Promise<CapitalEqualization>;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -902,7 +1024,10 @@ function PartnerForm({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [existing, setExisting] = useState(""),
-    [included, setIncluded] = useState<Owner[]>(["Genesis", "Ken"]);
+    [capitalPreview, setCapitalPreview] = useState<CapitalEqualization | null>(
+      null,
+    ),
+    [capitalTotal, setCapitalTotal] = useState("");
   const agreement = ws.data.installments.find((a) => a.id === form.record),
     fund = p.fundings.find((f) => f.id === form.record),
     payment = p.payments.find((p) => p.id === form.record);
@@ -953,16 +1078,24 @@ function PartnerForm({
           };
           break;
         case "funding_draft":
+          if (!capitalPreview || capitalPreview.total_cents !== amount("total"))
+            throw Error(
+              "Calculate equal capital and review the allocations first.",
+            );
           payload = {
             supplier: get("supplier"),
             purpose: get("purpose"),
             total_cents: amount("total"),
             start_month: ym("start_month"),
-            partners: included.map((owner) => ({
-              owner,
-              amount_cents: amount("amount_" + owner),
-              rate_bps: parseRecoveryRate(get("rate_" + owner)),
-            })),
+            equalize_capital: true,
+            capital_fingerprint: capitalPreview.fingerprint,
+            partners: capitalPreview.allocations
+              .filter((a) => a.amount_cents > 0)
+              .map(({ owner, amount_cents }) => ({
+                owner,
+                amount_cents,
+                rate_bps: parseRecoveryRate(get("rate_" + owner)),
+              })),
           };
           break;
         case "fund":
@@ -1012,6 +1145,23 @@ function PartnerForm({
         e instanceof Error
           ? e.message
           : "Unable to save. Retry the same action.",
+      );
+    } finally {
+      working.current = false;
+      setBusy(false);
+    }
+  }
+  async function calculate() {
+    if (working.current) return;
+    working.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      setCapitalPreview(await calculateCapital(parseMoney(capitalTotal)));
+    } catch (e) {
+      setCapitalPreview(null);
+      setError(
+        e instanceof Error ? e.message : "Unable to calculate equal capital.",
       );
     } finally {
       working.current = false;
@@ -1195,6 +1345,11 @@ function PartnerForm({
                     name="total"
                     inputMode="decimal"
                     placeholder="112,000.00"
+                    value={capitalTotal}
+                    onChange={(e) => {
+                      setCapitalTotal(e.target.value);
+                      setCapitalPreview(null);
+                    }}
                     required
                   />
                 </Field>
@@ -1210,35 +1365,49 @@ function PartnerForm({
                   />
                 </Field>
                 <div className="wide partner-allocation">
-                  <h3>Partner allocations and recovery rates</h3>
+                  <h3>Equal total capital for Genesis and Ken</h3>
                   <p>
-                    Amounts must add up to the supplier total. The percentage
-                    applies to that partner’s gross monthly share across all
-                    active capital debts.
+                    Allocations use their recorded contributions and previous
+                    funded capital advances. The lower-funded partner receives
+                    more of this advance, so both reach the same total credited
+                    capital. Recovery percentages apply to their 40% profit
+                    shares.
                   </p>
-                  {OWNERS.map((owner) => (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={busy || !capitalTotal}
+                    onClick={() => void calculate()}
+                  >
+                    Calculate equal capital
+                  </button>
+                  {capitalPreview && (
+                    <p>
+                      <strong>
+                        Target capital: {money(capitalPreview.target_cents)}{" "}
+                        each
+                      </strong>
+                      <br />
+                      The Gardens-funded amounts stay repayable through payout
+                      deductions. Contribution history stays unchanged.
+                    </p>
+                  )}
+                  {CAPITAL_PARTNERS.map((owner) => (
                     <div key={owner}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={included.includes(owner)}
-                          onChange={(e) =>
-                            setIncluded((old) =>
-                              e.target.checked
-                                ? [...old, owner]
-                                : old.filter((o) => o !== owner),
-                            )
-                          }
-                        />
-                        {owner}
-                      </label>
-                      {included.includes(owner) && (
+                      <strong>{owner}</strong>
+                      {capitalPreview && (
                         <>
-                          <Field label={`${owner} capital (₱)`}>
+                          <Field
+                            label={`${owner} Gardens-funded capital (₱)`}
+                            hint={`Current credited capital: ${money(capitalPreview.positions.find((p) => p.owner === owner)!.credited_cents)}`}
+                          >
                             <input
-                              name={"amount_" + owner}
-                              inputMode="decimal"
-                              required
+                              value={(
+                                capitalPreview.allocations.find(
+                                  (a) => a.owner === owner,
+                                )!.amount_cents / 100
+                              ).toFixed(2)}
+                              readOnly
                             />
                           </Field>
                           <Field
@@ -1248,7 +1417,16 @@ function PartnerForm({
                             <input
                               name={"rate_" + owner}
                               inputMode="decimal"
-                              required
+                              required={
+                                capitalPreview.allocations.find(
+                                  (a) => a.owner === owner,
+                                )!.amount_cents > 0
+                              }
+                              disabled={
+                                capitalPreview.allocations.find(
+                                  (a) => a.owner === owner,
+                                )!.amount_cents === 0
+                              }
                             />
                           </Field>
                         </>
@@ -1388,7 +1566,12 @@ function PartnerForm({
           >
             Cancel
           </button>
-          <button className="button primary" disabled={busy}>
+          <button
+            className="button primary"
+            disabled={
+              busy || (form.kind === "funding_draft" && !capitalPreview)
+            }
+          >
             {busy && <LoaderCircle size={16} className="spin" />}
             {form.kind === "settle"
               ? "Confirm settlement"

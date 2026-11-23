@@ -158,9 +158,12 @@ test("single per-owner recovery budget pays oldest funded debts and caps final r
     const id = f.command("funding_draft", {
       supplier: "Sample",
       purpose: "Older first",
-      total_cents: amount,
+      total_cents: amount * 2,
       start_month: "2026-11-01",
-      partners: [{ owner: "Genesis", amount_cents: amount, rate_bps: 5000 }],
+      partners: [
+        { owner: "Genesis", amount_cents: amount, rate_bps: 5000 },
+        { owner: "Ken", amount_cents: amount, rate_bps: 0 },
+      ],
     }).id;
     f.command("fund", { funding_id: id, paid_on, account: "cash" });
   }

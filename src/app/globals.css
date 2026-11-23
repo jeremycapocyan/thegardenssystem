@@ -3002,6 +3002,14 @@ td > strong {
 .partner-panel {
   scroll-margin-top: 24px;
 }
+.partner-capital-position {
+  min-width: 0;
+  grid-column: 1 / -1;
+  margin: 18px 0;
+}
+.partner-capital-position h3 {
+  margin: 0 0 12px;
+}
 .partner-panel > .table-scroll,
 .partner-panel > details,
 .partner-review {

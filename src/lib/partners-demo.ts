@@ -2,6 +2,7 @@ import { emptyPartners, previewPartnerSettlement } from "./partners";
 import { monthStart, monthEnd, todayInManila } from "./finance";
 import type { Dataset, Owner } from "./types";
 import type { CashData, CashAccount } from "./balances";
+import { checkCapitalAllocations } from "./capital-equality";
 type DemoAction = {
   id: string;
   action: string;
@@ -186,6 +187,20 @@ export function applyPartnerDemo(
         v.total_cents
     )
       throw Error("Partner allocations must equal the supplier payment.");
+    const equalization = checkCapitalAllocations(
+      p,
+      v.total_cents,
+      v.partners,
+      today,
+    );
+    if (
+      equalization &&
+      v.capital_fingerprint &&
+      equalization.fingerprint !== v.capital_fingerprint
+    )
+      throw Error(
+        "Capital records changed after preview. Calculate equal capital again.",
+      );
     p.fundings.push({
       id,
       supplier: v.supplier,
@@ -196,6 +211,7 @@ export function applyPartnerDemo(
       funded_on: null,
       movement_id: null,
       created_at: recordedAt,
+      capital_equalization: equalization,
     });
     for (const person of v.partners) {
       if (person.amount_cents <= 0)
@@ -220,6 +236,21 @@ export function applyPartnerDemo(
       (x) => x.id === v.funding_id && x.state === "draft",
     );
     if (!f) throw Error("Choose an unpaid draft capital advance.");
+    const equalization = checkCapitalAllocations(
+      p,
+      f.total_cents,
+      p.debts.filter((d) => d.funding_id === f.id),
+      today,
+    );
+    if (
+      equalization &&
+      f.capital_equalization &&
+      equalization.fingerprint !== f.capital_equalization.fingerprint
+    )
+      throw Error(
+        "Capital changed since this draft. Void the unpaid draft and create a reviewed equal-capital draft.",
+      );
+    f.capital_equalization = equalization;
     const movement = crypto.randomUUID();
     balances.movements.push({
       id: movement,

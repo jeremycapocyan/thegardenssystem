@@ -2,13 +2,30 @@ import fs from "node:fs/promises";
 import { EMPTY_DATA, type Dataset } from "../src/lib/types";
 import { demoCash, type CashData } from "../src/lib/balances";
 import { applyPartnerDemo } from "../src/lib/partners-demo";
-import { previewPartnerSettlement } from "../src/lib/partners";
+import { previewPartnerSettlement, emptyPartners } from "../src/lib/partners";
+import { previewCapitalEqualization } from "../src/lib/capital-equality";
 import { buildFinanceReport } from "../src/lib/finance-report";
 import { createFinanceReportPdf } from "../src/lib/finance-report-pdf";
 import { loadTimesheetPdfAssets } from "../src/lib/timesheet-pdf-assets";
-import { emptyRoi } from "../src/lib/roi";
 let finance: Dataset = {
   ...structuredClone(EMPTY_DATA),
+  partners: {
+    ...emptyPartners(),
+    capital_contributions: [
+      {
+        id: "sample-capital-g",
+        owner: "Genesis",
+        invested_on: "2026-11-01",
+        amount_cents: 8000000,
+      },
+      {
+        id: "sample-capital-k",
+        owner: "Ken",
+        invested_on: "2026-11-01",
+        amount_cents: 6000000,
+      },
+    ],
+  },
   categories: [
     { id: "income", name: "Court rental", kind: "income", active: true },
     {
@@ -56,15 +73,19 @@ command("reimburse", {
   account: "cash",
   reference: "SAMPLE REIMBURSEMENT",
 });
+const equalization = previewCapitalEqualization(
+  finance.partners!,
+  11200000,
+  "2026-12-01",
+);
 const funding = command("funding_draft", {
   supplier: "SAMPLE Court Supplier",
   purpose: "Fictional capital purchase funded for Genesis and Ken",
   total_cents: 11200000,
   start_month: "2026-11-01",
-  partners: [
-    { owner: "Genesis", amount_cents: 5600000, rate_bps: 5000 },
-    { owner: "Ken", amount_cents: 5600000, rate_bps: 5000 },
-  ],
+  equalize_capital: true,
+  capital_fingerprint: equalization.fingerprint,
+  partners: equalization.allocations.map((a) => ({ ...a, rate_bps: 5000 })),
 });
 command("fund", {
   funding_id: funding,
@@ -77,7 +98,14 @@ command("settle", { month: preview.month, fingerprint: preview.fingerprint });
 const source = {
     finance,
     balances: cash,
-    roi: emptyRoi(),
+    roi: {
+      capital: finance.partners!.capital_contributions!.map((c) => ({
+        ...c,
+        reference: "SAMPLE CAPITAL",
+        notes: "Fictional recorded contribution",
+      })),
+      exclusions: [],
+    },
     generated_at: "2026-12-01T02:00:00Z",
     prepared_by: "FICTIONAL PARTNER EXAMPLES",
   },
