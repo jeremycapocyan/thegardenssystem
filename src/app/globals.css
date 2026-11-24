@@ -2914,6 +2914,14 @@ td > strong {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
+.cash-borrowing-heading { display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:1rem; }
+.cash-borrowing-total span,.cash-borrowing-total strong { display:block; }
+.cash-borrowing-total strong { font-size:1.75rem; margin-top:.35rem; }
+.cash-borrowing-total { min-width:0; max-width:100%; }
+.cash-borrowing-total strong { overflow-wrap:anywhere; }
+.cash-tracker .cash-borrowing table { min-width:26rem; }
+.cash-borrowing .table-scroll { margin:1rem 0; }
+.cash-borrowing .button { margin-top:.5rem; }
 .cash-cards .panel {
   padding: 20px;
 }

@@ -1,8 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useWorkspace } from "./workspace-provider";
 import { canManage } from "@/lib/access";
 import { getBackend, friendlyError } from "@/lib/backend";
+import {
+  emptyPartnerCash,
+  partnerBorrowingSummary,
+  partnerBorrowingCsvRows,
+} from "@/lib/partner-cash";
 import {
   money,
   displayDate,
@@ -243,6 +249,12 @@ export function CashBalances() {
     });
   }
   const report = data ? cashSummary(data, asOf) : null,
+    borrowing = data
+      ? partnerBorrowingSummary(
+          data.finance.partner_cash ?? emptyPartnerCash(),
+          asOf,
+        )
+      : null,
     range = periodRange(ws.period, ws.reference);
   const entries =
     report?.entries.filter(
@@ -278,6 +290,10 @@ export function CashBalances() {
         report.unassignedRefunds / 100,
       ],
       ["Unassigned payments", report.unassignedOut / 100],
+      [],
+      ...(report.available && borrowing
+        ? partnerBorrowingCsvRows(borrowing, asOf)
+        : [["Partner borrowing", "Not available before the opening date"]]),
       [],
       [
         "Entry date",
@@ -450,6 +466,62 @@ export function CashBalances() {
                 <small>Cash + bank + withdrawable booking funds</small>
               </section>
             </div>
+            {report.available && borrowing && (
+              <section
+                className="panel cash-help cash-borrowing"
+                aria-labelledby="partner-borrowing-title"
+              >
+                <div className="cash-borrowing-heading">
+                  <div>
+                    <h2 id="partner-borrowing-title">Borrowed from partners</h2>
+                    <p>All recorded advances through {displayDate(asOf)}.</p>
+                  </div>
+                  <div className="cash-borrowing-total">
+                    <span>Still owed</span>
+                    <strong>{money(borrowing.remaining)}</strong>
+                  </div>
+                </div>
+                <p>
+                  Advance receipts and repayments are already included in Cash
+                  and Bank above. Spending the cash does not reduce what Gardens
+                  owes.
+                </p>
+                {borrowing.rows.length > 0 ? (
+                  <div className="table-scroll">
+                    <table aria-label="Partner borrowing summary">
+                      <thead>
+                        <tr>
+                          <th>Partner</th>
+                          <th>Cash received</th>
+                          <th>Repaid</th>
+                          <th>Still owed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {borrowing.rows.map((r) => (
+                          <tr key={r.owner}>
+                            <td>{r.owner}</td>
+                            <td>{money(r.received)}</td>
+                            <td>{money(r.repaid)}</td>
+                            <td>
+                              <strong>{money(r.remaining)}</strong>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p>No partner borrowing recorded for this date.</p>
+                )}
+                <Link
+                  className="button secondary"
+                  href="/installments/#partner-cash-advances"
+                >
+                  {admin ? "Manage partner advances" : "View partner advances"}
+                </Link>
+              </section>
+            )}
             {(report.unassignedIn > 0 ||
               report.unassignedOut > 0 ||
               report.unassignedRefunds > 0) && (

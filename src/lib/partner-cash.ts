@@ -1,5 +1,5 @@
 import { toDate } from "./finance";
-import type { Owner, Dataset } from "./types";
+import { OWNERS, type Owner, type Dataset } from "./types";
 import type { CashAccount, CashMovement, CashAllocation } from "./balances";
 
 export interface PartnerCashAdvance {
@@ -129,6 +129,56 @@ export function partnerCashSummary(
     overdue,
     unlinked: active ? a.amount_cents - spent : 0,
   };
+}
+
+export function partnerBorrowingSummary(data: PartnerCashData, asOf: string) {
+  toDate(asOf);
+  const rows = OWNERS.flatMap((owner) => {
+    const advances = data.advances.filter(
+      (a) => a.owner === owner && !a.voided_at && a.received_on <= asOf,
+    );
+    if (!advances.length) return [];
+    const received = advances.reduce((n, a) => n + a.amount_cents, 0);
+    const summaries = advances.map((a) => partnerCashSummary(data, a, asOf));
+    return [
+      {
+        owner,
+        received,
+        repaid: summaries.reduce((n, a) => n + a.repaid, 0),
+        remaining: summaries.reduce((n, a) => n + a.remaining, 0),
+      },
+    ];
+  });
+  return {
+    rows,
+    received: rows.reduce((n, r) => n + r.received, 0),
+    repaid: rows.reduce((n, r) => n + r.repaid, 0),
+    remaining: rows.reduce((n, r) => n + r.remaining, 0),
+  };
+}
+export function partnerBorrowingCsvRows(
+  summary: ReturnType<typeof partnerBorrowingSummary>,
+  asOf: string,
+): (string | number)[][] {
+  return [
+    ["Partner borrowing · as of", asOf],
+    ["Partner", "Cash received PHP", "Repaid PHP", "Still owed PHP"],
+    ...summary.rows.map((r) => [
+      r.owner,
+      r.received / 100,
+      r.repaid / 100,
+      r.remaining / 100,
+    ]),
+    [
+      "Total",
+      summary.received / 100,
+      summary.repaid / 100,
+      summary.remaining / 100,
+    ],
+    [
+      "Advance receipts and repayments are already included in account balances. Debt is shown separately; no additional cash posting.",
+    ],
+  ];
 }
 
 export function partnerCashCsvRows(
