@@ -60,6 +60,87 @@ test("cash advance due dates clamp to month end and retain original due day", ()
   assert.equal(partnerCashDue("2020-01-31", 2), "2020-03-31");
   assert.equal(partnerCashDue("2021-01-31", 1), "2021-02-28");
 });
+
+test("editing receipts and repayments adjusts existing sample cash entries and keeps removal auditable", () => {
+  const f = fixture(),
+    a = structuredClone(f.data.partner_cash!.advances[0]),
+    receipt = a.receipt_id;
+  f.cmd("edit_receipt", {
+    record_id: a.id,
+    expected: a,
+    owner: "Ken",
+    purpose: "Corrected fictional purpose",
+    received_on: "2020-01-02",
+    amount_cents: 3000000,
+    monthly_cents: 1000000,
+    first_due: "2020-02-29",
+    account: "bank",
+    reference: "EDIT",
+    reason: "Incorrect original amount",
+  });
+  assert.equal(f.data.partner_cash!.advances[0].receipt_id, receipt);
+  assert.equal(f.cash.movements.length, 1);
+  assert.equal(cashSummary(f.cash, "2020-01-03").balances.cash, 0);
+  assert.equal(cashSummary(f.cash, "2020-01-03").balances.bank, 3000000);
+  assert.throws(
+    () =>
+      f.cmd("edit_receipt", {
+        record_id: a.id,
+        expected: a,
+        amount_cents: 3000000,
+        account: "bank",
+        reason: "Stale form",
+      }),
+    /changed/,
+  );
+  const rep = f.cmd("repay", {
+      advance_id: a.id,
+      paid_on: "2020-02-01",
+      amount_cents: 300000,
+      account: "bank",
+    }),
+    r = structuredClone(f.data.partner_cash!.repayments[0]);
+  const payload = {
+      record_id: rep,
+      expected: r,
+      paid_on: "2020-02-02",
+      amount_cents: 250000,
+      account: "cash",
+      reference: "EDIT PAYMENT",
+      reason: "Wrong account",
+    },
+    key = crypto.randomUUID();
+  f.cmd("edit_repayment", payload, key);
+  f.cmd("edit_repayment", payload, key);
+  assert.equal(f.cash.movements.length, 2);
+  assert.equal(f.data.partner_cash!.repayments[0].movement_id, r.movement_id);
+  assert.equal(cashSummary(f.cash, "2020-02-03").balances.bank, 3000000);
+  assert.equal(cashSummary(f.cash, "2020-02-03").balances.cash, -250000);
+  assert.equal(
+    partnerCashSummary(
+      f.data.partner_cash!,
+      f.data.partner_cash!.advances[0],
+      "2020-02-03",
+    ).remaining,
+    2750000,
+  );
+  assert.throws(
+    () =>
+      f.cmd("void_receipt", {
+        record_id: a.id,
+        reason: "Remove mistaken receipt",
+      }),
+    /repayments/,
+  );
+  f.cmd("void_repayment", {
+    record_id: rep,
+    reason: "Remove mistaken payment",
+  });
+  f.cmd("void_receipt", { record_id: a.id, reason: "Remove mistaken receipt" });
+  assert.equal(f.cash.movements.length, 0);
+  assert.ok(f.data.partner_cash!.advances[0].voided_at);
+  assert.equal(f.data.expenses.length, 0);
+});
 test("cash debt summaries allocate early/partial repayments oldest-first and adjust final payment", () => {
   const f = fixture(),
     a = f.data.partner_cash!.advances[0];

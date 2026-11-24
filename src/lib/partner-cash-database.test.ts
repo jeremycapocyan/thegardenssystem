@@ -44,11 +44,12 @@ test("Partner cash advances reconcile financing, purchases and principal repayme
       actor,
       async () =>
         (
-          await one("select garden_partner_cash_command($1,$2,$3) v", [
-            action,
-            id,
-            JSON.stringify(payload),
-          ])
+          await one(
+            action.startsWith("edit_")
+              ? "select garden_partner_cash_edit($1,$2,$3) v"
+              : "select garden_partner_cash_command($1,$2,$3) v",
+            [action, id, JSON.stringify(payload)],
+          )
         ).v,
     );
   await as(admin, () =>
@@ -403,6 +404,276 @@ test("Partner cash advances reconcile financing, purchases and principal repayme
         /permission denied/,
       );
       await db.exec("reset role");
+    },
+  );
+  const advanceRecord = async (id: string) =>
+    (
+      await one(
+        "select to_jsonb(a) v from garden_partner_cash_advances a where id=$1",
+        [id],
+      )
+    ).v;
+  const repaymentRecord = async (id: string) =>
+    (
+      await one(
+        "select to_jsonb(r) v from garden_partner_cash_repayments r where id=$1",
+        [id],
+      )
+    ).v;
+  const advanceEdit = (a: any, extra: Record<string, unknown> = {}) => ({
+    record_id: a.id,
+    expected: a,
+    owner: a.owner,
+    purpose: a.purpose,
+    received_on: a.received_on,
+    amount_cents: a.amount_cents,
+    monthly_cents: a.monthly_cents,
+    first_due: a.first_due,
+    account: a.detail.to_account,
+    reference: a.detail.reference,
+    reason: "Fictional correction",
+    ...extra,
+  });
+  const repaymentEdit = (r: any, extra: Record<string, unknown> = {}) => ({
+    record_id: r.id,
+    expected: r,
+    paid_on: r.paid_on,
+    amount_cents: r.amount_cents,
+    account: r.detail.from_account,
+    reference: r.detail.reference,
+    reason: "Fictional correction",
+    ...extra,
+  });
+  await t.test(
+    "editing a receipt preserves IDs and updates its single cash movement and terms",
+    async () => {
+      const id = (await receive({ amount_cents: 10000, monthly_cents: 5000 }))
+          .id,
+        a = await advanceRecord(id),
+        key = randomUUID();
+      const payload = advanceEdit(a, {
+        owner: "Ken",
+        purpose: "Corrected purpose",
+        amount_cents: 12000,
+        monthly_cents: 4000,
+        received_on: "2020-01-02",
+        first_due: "2020-03-31",
+        account: "bank",
+        reference: "corrected",
+      });
+      const before = await one(
+        "select count(*)::int n from garden_cash_movements",
+      );
+      const result = await cmd("edit_receipt", payload, key);
+      assert.deepEqual(await cmd("edit_receipt", payload, key), result);
+      const after = await advanceRecord(id);
+      assert.equal(after.receipt_id, a.receipt_id);
+      assert.equal(after.amount_cents, 12000);
+      assert.equal(after.owner, "Ken");
+      assert.equal(after.first_due, "2020-03-31");
+      assert.equal(after.detail.to_account, "bank");
+      assert.equal(after.detail.amount_cents, 12000);
+      assert.equal(after.detail.reference, "corrected");
+      assert.equal(
+        (await one("select count(*)::int n from garden_cash_movements")).n,
+        before.n,
+      );
+      await assert.rejects(
+        cmd("edit_receipt", { ...payload, purpose: "Another" }, key),
+        /Retry key/,
+      );
+    },
+  );
+  await t.test(
+    "edits protect repayments, funding links and chronological dates without partial changes",
+    async () => {
+      const id = (await receive({ amount_cents: 20000, monthly_cents: 10000 }))
+        .id;
+      await buy(id, { amount_cents: 6000, total_cents: 6000 });
+      await repay(id, { amount_cents: 5000 });
+      const a = await advanceRecord(id);
+      await assert.rejects(
+        cmd(
+          "edit_receipt",
+          advanceEdit(a, { amount_cents: 5500, monthly_cents: 5000 }),
+        ),
+        /lower than/,
+      );
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(a, { received_on: "2020-01-03" })),
+        /after a linked/,
+      );
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(a, { owner: "Ken" })),
+        /changing the partner/,
+      );
+      assert.deepEqual(await advanceRecord(id), a);
+      await cmd(
+        "edit_receipt",
+        advanceEdit(a, {
+          purpose: "Allowed correction",
+          first_due: "2020-04-01",
+        }),
+      );
+      assert.equal((await advanceRecord(id)).purpose, "Allowed correction");
+    },
+  );
+  await t.test(
+    "repayment edits adjust the same outflow and enforce the remaining principal",
+    async () => {
+      const id = (await receive({ amount_cents: 10000, monthly_cents: 10000 }))
+          .id,
+        rep = (await repay(id, { amount_cents: 4000 })).id;
+      const before = await repaymentRecord(rep),
+        payload = repaymentEdit(before, {
+          amount_cents: 6000,
+          paid_on: "2020-03-01",
+          account: "bank",
+          reference: "corrected payment",
+        }),
+        key = randomUUID();
+      await cmd("edit_repayment", payload, key);
+      await cmd("edit_repayment", payload, key);
+      const after = await repaymentRecord(rep);
+      assert.equal(after.movement_id, before.movement_id);
+      assert.equal(after.amount_cents, 6000);
+      assert.equal(after.detail.from_account, "bank");
+      assert.equal(after.detail.amount_cents, 6000);
+      assert.equal(after.detail.reference, "corrected payment");
+      await assert.rejects(
+        cmd("edit_repayment", repaymentEdit(after, { amount_cents: 10001 })),
+        /outstanding debt/,
+      );
+      await assert.rejects(
+        cmd("edit_repayment", repaymentEdit(after, { paid_on: "2019-12-31" })),
+        /on or after receipt/,
+      );
+      assert.deepEqual(await repaymentRecord(rep), after);
+      await cmd("void_repayment", {
+        record_id: rep,
+        reason: "Remove incorrect payment",
+      });
+      await cmd("void_receipt", {
+        record_id: id,
+        reason: "Remove original incorrect advance",
+      });
+      assert.ok((await advanceRecord(id)).voided_at);
+    },
+  );
+  await t.test(
+    "stale edits, missing reasons and unauthorized roles cannot overwrite finance",
+    async () => {
+      const id = (await receive({ amount_cents: 10000, monthly_cents: 10000 }))
+          .id,
+        a = await advanceRecord(id);
+      await cmd(
+        "edit_receipt",
+        advanceEdit(a, { purpose: "First correction" }),
+      );
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(a, { purpose: "Stale correction" })),
+        /changed/,
+      );
+      const current = await advanceRecord(id);
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(current, { reason: "" })),
+        /reason/,
+      );
+      for (const actor of [viewer, employee, hr, disabled])
+        await assert.rejects(
+          cmd("edit_receipt", advanceEdit(current), randomUUID(), actor),
+          /Finance management/,
+        );
+      await db.exec("set role anon");
+      await assert.rejects(
+        db.query("select garden_partner_cash_edit('edit_receipt',$1,'{}')", [
+          randomUUID(),
+        ]),
+        /permission denied/,
+      );
+      await db.exec("reset role");
+    },
+  );
+  await t.test(
+    "linked pre-existing receipts retain their cash values when metadata is edited",
+    async () => {
+      const mid = randomUUID();
+      await as(admin, () =>
+        db.query(
+          "select garden_cash_move($1,'2020-05-01','funding',null,'cash',10000,'old','Existing cash receipt')",
+          [mid],
+        ),
+      );
+      const id = (
+        await receive({
+          received_on: "2020-05-01",
+          first_due: "2020-06-01",
+          amount_cents: 10000,
+          monthly_cents: 10000,
+          movement_id: mid,
+        })
+      ).id;
+      const a = await advanceRecord(id);
+      await cmd(
+        "edit_receipt",
+        advanceEdit(a, {
+          purpose: "Clarified purpose",
+          first_due: "2020-07-01",
+        }),
+      );
+      const current = await advanceRecord(id);
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(current, { amount_cents: 12000 })),
+        /pre-existing receipt/,
+      );
+      await assert.rejects(
+        cmd("edit_receipt", advanceEdit(current, { account: "bank" })),
+        /pre-existing receipt/,
+      );
+      const paymentMovement = randomUUID();
+      await as(admin, () =>
+        db.query(
+          "select garden_cash_move($1,'2020-05-02','funding','cash',null,3000,'manual repayment','Existing repayment')",
+          [paymentMovement],
+        ),
+      );
+      const payment = (
+        await repay(id, {
+          paid_on: "2020-05-02",
+          amount_cents: 3000,
+          movement_id: paymentMovement,
+        })
+      ).id;
+      await assert.rejects(
+        cmd(
+          "edit_repayment",
+          repaymentEdit(await repaymentRecord(payment), { amount_cents: 2000 }),
+        ),
+        /pre-existing movement/,
+      );
+      await cmd("void_repayment", {
+        record_id: payment,
+        reason: "Remove wrong repayment link",
+      });
+      assert.equal(
+        (
+          await one(
+            "select count(*)::int n from garden_cash_movements where id=$1",
+            [paymentMovement],
+          )
+        ).n,
+        1,
+      );
+      await cmd("void_receipt", { record_id: id, reason: "Remove wrong link" });
+      assert.equal(
+        (
+          await one(
+            "select count(*)::int n from garden_cash_movements where id=$1",
+            [mid],
+          )
+        ).n,
+        1,
+      );
     },
   );
   await db.close();

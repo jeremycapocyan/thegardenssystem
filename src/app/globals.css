@@ -3251,7 +3251,7 @@ td > strong {
 #partner-cash-advances > .partner-help { padding:0 1rem; line-height:1.6; }
 #partner-cash-advances .panel-heading { flex-wrap: wrap; gap: 1rem; }
 #partner-cash-advances .button-row { display: flex; gap: .5rem; flex-wrap: wrap; }
-#partner-cash-advances .partner-actions { display: flex; gap: .5rem; flex-wrap: wrap; min-width: 10rem; }
+#partner-cash-advances .partner-actions { display: flex; gap: .5rem; flex-wrap: wrap; min-width: 10rem; width:12rem; }
 .onda-note-choice {
   display: flex;
   gap: 7px;

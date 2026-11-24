@@ -56,6 +56,8 @@ export type PartnerCashAction =
   | "receive"
   | "purchase"
   | "repay"
+  | "edit_receipt"
+  | "edit_repayment"
   | "void_receipt"
   | "void_purchase"
   | "void_repayment";

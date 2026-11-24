@@ -85,7 +85,134 @@ export function applyPartnerCashDemo(
     cash.movements.push(m);
     return { m, owned: true };
   };
-  if (action === "receive") {
+  if (action === "edit_receipt" || action === "edit_repayment") {
+    if (!text("reason").trim()) throw Error("Enter a reason for this edit.");
+    if (!["cash", "bank"].includes(account))
+      throw Error("Choose Cash or Bank.");
+    const amount = positive(num("amount_cents"));
+    if (action === "edit_receipt") {
+      const a = p.advances.find(
+        (a) => a.id === text("record_id") && !a.voided_at,
+      );
+      if (!a) throw Error("Choose an active advance to edit.");
+      if (JSON.stringify(a) !== JSON.stringify(v.expected))
+        throw Error(
+          "This advance changed. Close the form, refresh, and review it again.",
+        );
+      const on = date(text("received_on")),
+        first = text("first_due"),
+        monthly = positive(num("monthly_cents"));
+      toDate(first);
+      if (first < on || first > "2100-12-31" || monthly > amount)
+        throw Error("Check receipt date, repayment date and monthly amount.");
+      const due = toDate(first);
+      if (
+        Math.ceil(amount / monthly) - 1 >
+        (2100 - due.getUTCFullYear()) * 12 + 11 - due.getUTCMonth()
+      )
+        throw Error("Choose repayment terms ending by December 2100.");
+      const payments = p.repayments.filter(
+          (r) => r.advance_id === a.id && !r.voided_at,
+        ),
+        spends = p.spends.filter((s) => s.advance_id === a.id && !s.voided_at);
+      if (
+        amount < payments.reduce((n, r) => n + r.amount_cents, 0) ||
+        amount < spends.reduce((n, s) => n + s.amount_cents, 0)
+      )
+        throw Error(
+          "Cash received cannot be lower than recorded repayments or linked expense funding.",
+        );
+      if (payments.length && text("owner") !== a.owner)
+        throw Error("Correct existing repayments before changing the partner.");
+      if (
+        payments.some((r) => r.paid_on < on) ||
+        spends.some((s) => s.detail.expense.paid_on < on)
+      )
+        throw Error(
+          "Receipt date cannot be after a linked purchase or repayment.",
+        );
+      if (
+        !["Genesis", "Ken", "Jeremy"].includes(text("owner")) ||
+        !text("purpose")
+      )
+        throw Error("Choose a partner and enter the purpose.");
+      const m = cash.movements.find((m) => m.id === a.receipt_id);
+      if (!m)
+        throw Error(
+          "Linked receipt is inconsistent. Review its history before editing.",
+        );
+      if (
+        !a.owned_receipt &&
+        (amount !== a.amount_cents ||
+          on !== a.received_on ||
+          account !== m.to_account ||
+          text("reference") !== m.reference)
+      )
+        throw Error(
+          "This advance links a pre-existing receipt. Its amount, date, account and reference cannot be edited here.",
+        );
+      if (a.owned_receipt)
+        Object.assign(m, {
+          moved_on: on,
+          to_account: account,
+          amount_cents: amount,
+          reference: text("reference"),
+          reason:
+            "Partner cash advance received: " +
+            text("owner") +
+            " — " +
+            text("purpose"),
+        });
+      Object.assign(a, {
+        owner: text("owner"),
+        purpose: text("purpose"),
+        received_on: on,
+        amount_cents: amount,
+        monthly_cents: monthly,
+        first_due: first,
+        detail: structuredClone(m),
+      });
+    } else {
+      const r = p.repayments.find(
+        (r) => r.id === text("record_id") && !r.voided_at,
+      );
+      if (!r) throw Error("Choose an active repayment to edit.");
+      if (JSON.stringify(r) !== JSON.stringify(v.expected))
+        throw Error(
+          "This repayment changed. Close the form, refresh, and review it again.",
+        );
+      if (!r.owned_movement)
+        throw Error(
+          "This repayment links a pre-existing movement. Remove the link and choose the corrected source instead.",
+        );
+      const a = p.advances.find((a) => a.id === r.advance_id && !a.voided_at);
+      if (!a) throw Error("Choose an active cash advance.");
+      const on = date(text("paid_on"), a.received_on),
+        other = p.repayments
+          .filter((p) => p.advance_id === a.id && p.id !== r.id && !p.voided_at)
+          .reduce((n, p) => n + p.amount_cents, 0);
+      if (other + amount > a.amount_cents)
+        throw Error("Repayment cannot exceed the outstanding debt.");
+      const m = cash.movements.find((m) => m.id === r.movement_id);
+      if (!m)
+        throw Error(
+          "Linked repayment is inconsistent. Review its history before editing.",
+        );
+      Object.assign(m, {
+        moved_on: on,
+        from_account: account,
+        amount_cents: amount,
+        reference: text("reference"),
+        reason:
+          "Partner cash advance repayment: " + a.owner + " — " + a.purpose,
+      });
+      Object.assign(r, {
+        paid_on: on,
+        amount_cents: amount,
+        detail: structuredClone(m),
+      });
+    }
+  } else if (action === "receive") {
     const amount = positive(num("amount_cents")),
       monthly = positive(num("monthly_cents")),
       on = date(text("received_on")),

@@ -26,14 +26,20 @@ import {
   type PartnerCashAction,
 } from "@/lib/partner-cash";
 import { applyPartnerCashDemo } from "@/lib/partner-cash-demo";
+import {
+  PartnerCashEditForm,
+  type PartnerCashSave,
+} from "./partner-cash-edit-form";
 const STORE = "gardens.balances.sample.v1";
 const titles: Record<PartnerCashAction, string> = {
   receive: "Receive partner advance",
   purchase: "Link an expense (optional)",
   repay: "Record repayment",
-  void_receipt: "Correct an advance receipt",
+  edit_receipt: "Edit advance",
+  edit_repayment: "Edit repayment",
+  void_receipt: "Remove advance",
   void_purchase: "Correct a purchase link",
-  void_repayment: "Correct a repayment",
+  void_repayment: "Remove repayment",
 };
 function Field({
   label,
@@ -144,6 +150,50 @@ export function PartnerCashAdvances() {
     a.download = `Gardens - Partner cash advances - ${ws.asOf}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+  const save: PartnerCashSave = async (action, id, payload, cash) => {
+    if (!admin) throw Error("Finance management permission required.");
+    if (ws.mode === "demo") {
+      const next = applyPartnerCashDemo(
+        ws.data,
+        cash,
+        action,
+        id,
+        payload,
+        todayInManila(),
+      );
+      localStorage.setItem(
+        STORE,
+        JSON.stringify({ ...next.balances, finance: undefined }),
+      );
+      ws.commitDemoFinance(next.data);
+    } else {
+      if (ws.mode !== "live" || !navigator.onLine)
+        throw Error("Reconnect, then retry this same action.");
+      const result = await getBackend()!.rpc(
+        action.startsWith("edit_")
+          ? "garden_partner_cash_edit"
+          : "garden_partner_cash_command",
+        { p_action: action, p_id: id, p_payload: payload },
+      );
+      if (result.error) throw Error(friendlyError(result.error));
+    }
+  };
+  async function saved() {
+    const action = form?.action;
+    setForm(null);
+    setNotice(
+      action === "receive"
+        ? "Advance received. The Gardens now owes this amount to the partner."
+        : action === "repay"
+          ? "Repayment recorded. The amount owed and account funds have been reduced."
+          : action?.startsWith("edit_")
+            ? "Changes saved. The debt and linked account entry have been updated."
+            : action === "void_receipt" || action === "void_repayment"
+              ? "Record removed. Its correction history is retained."
+              : "Saved. The linked record has been updated.",
+    );
+    if (ws.mode === "live") await ws.refresh();
   }
   return (
     <section className="panel partner-panel" id="partner-cash-advances">
@@ -267,6 +317,20 @@ export function PartnerCashAdvances() {
                             Record repayment
                           </button>
                         )}
+                        <button
+                          className="button secondary"
+                          disabled={loading}
+                          onClick={() => void open("edit_receipt", a.id)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="button secondary"
+                          disabled={loading}
+                          onClick={() => void open("void_receipt", a.id)}
+                        >
+                          Remove
+                        </button>
                         <details className="partner-cash-more">
                           <summary>More options</summary>
                           <button
@@ -275,13 +339,6 @@ export function PartnerCashAdvances() {
                             onClick={() => void open("purchase", a.id)}
                           >
                             Link an existing expense (optional)
-                          </button>
-                          <button
-                            className="button secondary"
-                            disabled={loading}
-                            onClick={() => void open("void_receipt", a.id)}
-                          >
-                            Correct receipt
                           </button>
                         </details>
                       </div>
@@ -371,13 +428,27 @@ export function PartnerCashAdvances() {
                     {r.voided_at ? (
                       `Voided: ${r.void_reason}`
                     ) : admin ? (
-                      <button
-                        className="button secondary"
-                        disabled={loading}
-                        onClick={() => void open("void_repayment", r.id)}
-                      >
-                        Correct repayment
-                      </button>
+                      <div className="partner-actions">
+                        <button
+                          className="button secondary"
+                          disabled={loading || !r.owned_movement}
+                          title={
+                            !r.owned_movement
+                              ? "Linked pre-existing payment: remove the link and choose a corrected source."
+                              : undefined
+                          }
+                          onClick={() => void open("edit_repayment", r.id)}
+                        >
+                          Edit repayment
+                        </button>
+                        <button
+                          className="button secondary"
+                          disabled={loading}
+                          onClick={() => void open("void_repayment", r.id)}
+                        >
+                          Remove repayment
+                        </button>
+                      </div>
                     ) : (
                       "Active"
                     )}
@@ -398,24 +469,24 @@ export function PartnerCashAdvances() {
         recorded once in Expenses. Repayments are not additional expenses and do
         not change capital or profit shares.
       </p>
-      {form && (
-        <CashAdvanceForm
-          key={`${form.action}:${form.record || ""}`}
-          {...form}
-          onClose={() => setForm(null)}
-          onSaved={async () => {
-            setForm(null);
-            setNotice(
-              form.action === "receive"
-                ? "Advance received. The Gardens now owes this amount to the partner."
-                : form.action === "repay"
-                  ? "Repayment recorded. The amount owed and account funds have been reduced."
-                  : "Saved. The linked record has been updated.",
-            );
-            if (ws.mode === "live") await ws.refresh();
-          }}
-        />
-      )}
+      {form &&
+        (form.action.startsWith("edit_") ? (
+          <PartnerCashEditForm
+            key={`${form.action}:${form.record}`}
+            {...form}
+            onSave={save}
+            onSaved={saved}
+            onClose={() => setForm(null)}
+          />
+        ) : (
+          <CashAdvanceForm
+            key={`${form.action}:${form.record || ""}`}
+            {...form}
+            onSave={save}
+            onClose={() => setForm(null)}
+            onSaved={saved}
+          />
+        ))}
     </section>
   );
 }
@@ -426,12 +497,14 @@ function CashAdvanceForm({
   cash,
   onClose,
   onSaved,
+  onSave,
 }: {
   action: PartnerCashAction;
   record?: string;
   cash: CashData;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onSave: PartnerCashSave;
 }) {
   const ws = useWorkspace(),
     dialog = useRef<HTMLDialogElement>(null),
@@ -536,30 +609,7 @@ function CashAdvanceForm({
       const key = JSON.stringify(payload);
       if (retry.current?.key !== key)
         retry.current = { key, id: crypto.randomUUID() };
-      if (ws.mode === "demo") {
-        const next = applyPartnerCashDemo(
-          ws.data,
-          cash,
-          action,
-          retry.current.id,
-          payload,
-          today,
-        );
-        localStorage.setItem(
-          STORE,
-          JSON.stringify({ ...next.balances, finance: undefined }),
-        );
-        ws.commitDemoFinance(next.data);
-      } else {
-        if (!navigator.onLine)
-          throw Error("Reconnect, then retry this same action.");
-        const result = await getBackend()!.rpc("garden_partner_cash_command", {
-          p_action: action,
-          p_id: retry.current.id,
-          p_payload: payload,
-        });
-        if (result.error) throw Error(friendlyError(result.error));
-      }
+      await onSave(action, retry.current.id, payload, cash);
       await onSaved();
     } catch (e) {
       setError(
@@ -574,6 +624,10 @@ function CashAdvanceForm({
   }
   const sourceSp = p.spends.find((s) => s.id === record),
     sourceRp = p.repayments.find((r) => r.id === record);
+  const blockingLinks =
+    action === "void_receipt" &&
+    (p.repayments.some((r) => r.advance_id === record && !r.voided_at) ||
+      p.spends.some((s) => s.advance_id === record && !s.voided_at));
   const owned =
     action === "void_receipt"
       ? a?.owned_receipt
@@ -616,8 +670,15 @@ function CashAdvanceForm({
             )}
             {correction ? (
               <>
+                {blockingLinks && (
+                  <p className="error-box wide">
+                    This advance has repayments or expense links. Remove the
+                    repayment records and unlink expenses first. Removing an
+                    advance never deletes its purchases.
+                  </p>
+                )}
                 <p className="wide">
-                  This corrects a mistaken entry; it does not return actual
+                  This removes a mistaken record; it does not return actual
                   money.{" "}
                   {owned
                     ? "The entry created by this workflow and its account effect will be removed; its audit history stays."
@@ -628,7 +689,14 @@ function CashAdvanceForm({
                     ? " The account assignment created when linking will also be removed."
                     : ""}
                 </p>
-                <Field label="Correction reason" wide>
+                <Field
+                  label={
+                    action === "void_receipt" || action === "void_repayment"
+                      ? "Reason for removal"
+                      : "Correction reason"
+                  }
+                  wide
+                >
                   <textarea name="reason" maxLength={1000} required />
                 </Field>
                 <label className="partner-check wide">
@@ -932,11 +1000,13 @@ function CashAdvanceForm({
           >
             Cancel
           </button>
-          <button className="button primary" disabled={busy}>
+          <button className="button primary" disabled={busy || blockingLinks}>
             {busy
               ? "Saving…"
               : correction
-                ? "Confirm correction"
+                ? action === "void_receipt" || action === "void_repayment"
+                  ? "Remove record"
+                  : "Confirm correction"
                 : link
                   ? "Confirm existing-entry link"
                   : "Save"}
