@@ -4,6 +4,7 @@ import { X, LoaderCircle } from "lucide-react";
 import { parseMoney, todayInManila, money } from "@/lib/finance";
 import {
   manilaInput,
+  shiftHours,
   fromManilaInput,
   type Employee,
   type PayrollDay,
@@ -72,6 +73,18 @@ export function TeamDialog({
   const day = editor.day;
   const a = editor.action;
   const [kind, setKind] = useState(editor.requestKind || "leave");
+  const [shiftStart, setShiftStart] = useState(
+    editor.schedule?.start_time?.slice(0, 5) || "15:30",
+  );
+  const [shiftEnd, setShiftEnd] = useState(
+    editor.schedule?.end_time?.slice(0, 5) || "23:30",
+  );
+  let shiftPay: number | null = null;
+  try {
+    shiftPay = shiftHours(shiftStart, shiftEnd).cents;
+  } catch {
+    /* Validate on save. */
+  }
   const [allOt, setAllOt] = useState(true);
   const [decision, setDecision] = useState("approved");
   const titles = {
@@ -101,6 +114,7 @@ export function TeamDialog({
       const get = (name: string) => String(f.get(name) || "").trim();
       let p: Record<string, unknown> = { id, employee_id: e?.id };
       if (a === "employee") {
+        shiftHours(shiftStart, shiftEnd);
         const start = get("started_on");
         if (get("ended_on") && get("ended_on") < start)
           throw Error("End date must be on or after the start date.");
@@ -113,6 +127,8 @@ export function TeamDialog({
           active: f.has("active"),
           effective_from: get("effective_from"),
           weekdays: f.getAll("weekday").map(Number),
+          start_time: shiftStart,
+          end_time: shiftEnd,
         };
       }
       if (a === "request") {
@@ -257,6 +273,38 @@ export function TeamDialog({
                   defaultValue={e ? todayInManila() : todayInManila()}
                 />
               </Field>
+              <Field label="Scheduled start · Manila time">
+                <input
+                  name="start_time"
+                  type="time"
+                  required
+                  step="60"
+                  value={shiftStart}
+                  onChange={(event) => setShiftStart(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Scheduled finish · Manila time"
+                hint="Finish must be later than start on the same day."
+              >
+                <input
+                  name="end_time"
+                  type="time"
+                  required
+                  step="60"
+                  value={shiftEnd}
+                  onChange={(event) => setShiftEnd(event.target.value)}
+                />
+              </Field>
+              <p className="staff-info wide">
+                ₱81.25 per scheduled hour.{" "}
+                {shiftPay === null
+                  ? "Choose a valid shift."
+                  : `Complete shift: ${money(shiftPay)}.`}{" "}
+                Missed time reduces pay; overtime after the scheduled finish
+                requires approval. Changing hours resets affected overtime
+                reviews. Finalized payroll stays unchanged.
+              </p>
               <label className="team-check">
                 <input
                   type="checkbox"
@@ -266,7 +314,7 @@ export function TeamDialog({
                 Active employee
               </label>
               <fieldset className="weekday-field field wide">
-                <legend>Recurring workdays · 3:30–11:30 PM</legend>
+                <legend>Recurring workdays</legend>
                 <div>
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
                     (label, i) => (
@@ -397,7 +445,7 @@ export function TeamDialog({
                   defaultValue={
                     day?.clock_in
                       ? manilaInput(day.clock_in)
-                      : `${day?.date || todayInManila()}T15:30`
+                      : `${day?.date || todayInManila()}T${day?.scheduled_start?.slice(0, 5) || "15:30"}`
                   }
                 />
               </Field>
@@ -418,7 +466,9 @@ export function TeamDialog({
                 name="working"
                 defaultValue={day?.scheduled ? "false" : "true"}
               >
-                <option value="true">Working · 3:30–11:30 PM</option>
+                <option value="true">
+                  Working · employee’s assigned shift
+                </option>
                 <option value="false">Rest day</option>
               </select>
             </Field>

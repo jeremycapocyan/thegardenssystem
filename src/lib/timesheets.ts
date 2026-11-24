@@ -1,3 +1,4 @@
+import { payrollShiftLabel } from "./team";
 import { addDays, toDate } from "./finance";
 import {
   employeePeriod,
@@ -116,7 +117,7 @@ export function demoTimesheetReport(
               days.push({
                 ...day,
                 finalized: !!frozen,
-                scheduled_shift: day.scheduled ? "15:30 - 23:30" : "Rest day",
+                scheduled_shift: payrollShiftLabel(day),
                 recorded_seconds:
                   day.clock_in && day.clock_out
                     ? Math.max(

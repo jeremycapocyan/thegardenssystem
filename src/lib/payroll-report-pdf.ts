@@ -1,3 +1,4 @@
+import { payrollShiftLabel } from "./team";
 import { PDFDocument, PageSizes, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { createTimesheetPdf, type TimesheetPdfAssets } from "./timesheet-pdf";
@@ -192,7 +193,7 @@ export async function createPayrollReportPdf(
   const days: TimesheetDay[] = snapshot.days.map((d) => ({
     ...d,
     finalized: true,
-    scheduled_shift: d.scheduled ? "15:30 - 23:30" : "Rest day",
+    scheduled_shift: payrollShiftLabel(d),
     recorded_seconds:
       d.clock_in && d.clock_out
         ? Math.max(

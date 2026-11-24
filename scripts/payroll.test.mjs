@@ -642,5 +642,205 @@ test("Employee payroll database and permissions", async (t) => {
       );
     },
   );
+  await t.test(
+    "custom morning shifts use the hourly rate for attendance, leave and overtime",
+    async () => {
+      const morningId = randomUUID();
+      const details = {
+        ...employee(morningId, "Morning sample"),
+        start_time: "05:30",
+        end_time: "09:30",
+      };
+      const save = (effective_from, start_time, end_time) =>
+        command(admin, "employee", {
+          ...details,
+          employee_id: morningId,
+          effective_from,
+          start_time,
+          end_time,
+        });
+      const correctMorning = (date, start, finish) =>
+        command(admin, "correct", {
+          employee_id: morningId,
+          date,
+          clock_in: `${date}T${start}:00+08:00`,
+          clock_out: finish ? `${date}T${finish}:00+08:00` : null,
+          reason: "Fictional shift test",
+        });
+      const get = () =>
+        as(
+          admin,
+          async () =>
+            (
+              await db.query(
+                "select garden_payroll_preview($1,'2020-01-01') v",
+                [morningId],
+              )
+            ).rows[0].v,
+        );
+      for (const [start, end] of [
+        ["09:30", "05:30"],
+        ["05:30", "05:30"],
+        ["25:30", "09:30"],
+        ["05:30:01", "09:30"],
+        ["05:30", "24:00"],
+      ])
+        await assert.rejects(
+          command(admin, "employee", {
+            ...details,
+            start_time: start,
+            end_time: end,
+          }),
+          /valid start|later than start/,
+        );
+      await command(admin, "employee", details);
+      await correctMorning("2020-01-01", "05:00", "09:30");
+      await correctMorning("2020-01-02", "05:45", "09:15");
+      await correctMorning("2020-01-03", "05:30", "10:30");
+      await correctMorning("2020-01-04", "05:30", null);
+      for (const [date, paid] of [
+        ["2020-01-05", true],
+        ["2020-01-06", false],
+      ]) {
+        const requestId = randomUUID();
+        await db.query(
+          "insert into garden_staff_requests(id,employee_id,kind,start_date,end_date,reason,status,paid_leave) values($1,$2,'leave',$3,$3,'Fictional leave','approved',$4)",
+          [requestId, morningId, date, paid],
+        );
+      }
+      await command(admin, "override", {
+        employee_id: morningId,
+        date: "2020-01-07",
+        working: false,
+        reason: "Fictional rest day",
+      });
+      let p = await get();
+      assert.equal(p.days[0].regular_cents, 32500);
+      assert.equal(p.days[0].late_seconds, 0);
+      assert.equal(p.days[0].overtime_seconds, 0);
+      assert.equal(p.days[0].scheduled_start, "05:30:00");
+      assert.equal(p.days[0].scheduled_seconds, 14400);
+      assert.equal(p.days[1].deduction_cents, 4063);
+      assert.equal(p.days[1].regular_cents, 28437);
+      assert.equal(p.days[1].late_seconds, 900);
+      assert.equal(p.days[1].undertime_seconds, 900);
+      assert.equal(p.days[2].overtime_seconds, 3600);
+      assert(p.blockers.some((b) => b.includes("2020-01-03: overtime")));
+      await assert.rejects(
+        command(admin, "overtime", {
+          employee_id: morningId,
+          attendance_id: p.days[2].attendance_id,
+          seconds: 3601,
+        }),
+        /cannot exceed/,
+      );
+      await command(admin, "overtime", {
+        employee_id: morningId,
+        attendance_id: p.days[2].attendance_id,
+        seconds: 3600,
+      });
+      p = await get();
+      assert.equal(p.days[2].total_cents, 40625);
+      assert.equal(p.days[3].status, "Missing time out");
+      assert.equal(p.days[4].leave_cents, 32500);
+      assert.equal(p.days[5].leave_cents, 0);
+      assert.equal(p.days[6].status, "Rest day");
+      assert.equal(p.days[7].deduction_cents, 32500);
+      await as(u2, () =>
+        assert.rejects(
+          db.query("select garden_staff_shift($1,'2020-01-01')", [morningId]),
+          (e) => e.code === "42501",
+        ),
+      );
+      await assert.rejects(
+        command(viewer, "employee", { ...details, employee_id: morningId }),
+        (e) => e.code === "42501",
+      );
+      await assert.rejects(
+        command(u2, "employee", { ...details, employee_id: morningId }),
+        (e) => e.code === "42501",
+      );
+
+      // Effective dates preserve earlier days and changes revoke affected overtime reviews.
+      await correctMorning("2020-01-04", "05:30", "09:30");
+      await save("2020-01-08", "15:30", "23:30");
+      await command(admin, "correct", {
+        employee_id: morningId,
+        date: "2020-01-09",
+        clock_in: "2020-01-09T15:30:00+08:00",
+        clock_out: "2020-01-10T00:30:00+08:00",
+        reason: "Fictional overnight timeout",
+      });
+      p = await get();
+      assert.equal(p.days[0].regular_cents, 32500);
+      assert.equal(p.days[7].scheduled_cents, 65000);
+      assert.equal(p.days[8].overtime_seconds, 3600);
+      await command(admin, "overtime", {
+        employee_id: morningId,
+        attendance_id: p.days[8].attendance_id,
+        seconds: 3600,
+      });
+      await save("2020-01-09", "14:30", "22:30");
+      p = await get();
+      assert.equal(p.days[8].ot_reviewed, false);
+      assert.equal(p.days[8].approved_ot_seconds, 0);
+      assert.equal(p.days[8].overtime_seconds, 7200);
+      assert.equal(p.days[2].ot_reviewed, true);
+      await command(admin, "overtime", {
+        employee_id: morningId,
+        attendance_id: p.days[8].attendance_id,
+        seconds: 7200,
+      });
+      const finalized = await command(admin, "finalize", {
+        employee_id: morningId,
+        period_start: "2020-01-01",
+      });
+      const frozen = structuredClone(finalized.snapshot);
+      await assert.rejects(
+        save("2020-01-15", "06:00", "10:00"),
+        /Finalized payroll/,
+      );
+      await save("2020-01-16", "06:00", "10:00");
+      const saved = (
+        await db.query("select snapshot from garden_payroll where id=$1", [
+          finalized.id,
+        ])
+      ).rows[0].snapshot;
+      assert.deepEqual(saved, frozen);
+      // Old clients that omit hours preserve the effective schedule, rather than reset it.
+      await command(admin, "employee", {
+        ...employee(morningId, "Morning sample"),
+        employee_id: morningId,
+        effective_from: "2020-01-17",
+      });
+      const hours = (
+        await db.query(
+          "select start_time::text s,end_time::text e from garden_employee_schedules where employee_id=$1 and effective_from='2020-01-17'",
+          [morningId],
+        )
+      ).rows[0];
+      assert.deepEqual(hours, { s: "06:00:00", e: "10:00:00" });
+      const timesheet = await as(
+        admin,
+        async () =>
+          (
+            await db.query(
+              "select garden_timesheet_report('2020-01-01','2020-01-20',$1) v",
+              [morningId],
+            )
+          ).rows[0].v,
+      );
+      assert.equal(
+        timesheet.employees[0].days[0].scheduled_shift,
+        "05:30 - 09:30",
+      );
+      assert.equal(timesheet.employees[0].days[0].finalized, true);
+      assert.equal(
+        timesheet.employees[0].days[15].scheduled_shift,
+        "06:00 - 10:00",
+      );
+      assert.equal(timesheet.employees[0].days[15].finalized, false);
+    },
+  );
   await db.close();
 });

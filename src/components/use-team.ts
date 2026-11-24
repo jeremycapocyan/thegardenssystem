@@ -6,6 +6,8 @@ import {
   demoTeam,
   emptyTeam,
   previewPayroll,
+  shiftHours,
+  scheduleOn,
   TEAM_DEMO_STORE,
   type TeamData,
   type PayrollPreview,
@@ -126,6 +128,7 @@ export function useTeam() {
     };
     if (action === "employee") {
       const item = {
+        ...employee,
         id: eid || id,
         profile_id: employee?.profile_id || null,
         name: String(payload.name),
@@ -135,7 +138,23 @@ export function useTeam() {
         active: payload.active !== false,
       } as Employee;
       const effective = String(payload.effective_from);
-      checkLocked(effective);
+      if (
+        next.payroll.some(
+          (p) =>
+            p.employee_id === item.id &&
+            (p.period_end >= effective ||
+              (employee && item.started_on !== employee.started_on)),
+        )
+      )
+        throw Error(
+          "Finalized payroll is locked. Apply schedule changes after its end date.",
+        );
+      const previous = scheduleOn(next, item.id, effective);
+      const startTime = String(
+        payload.start_time || previous?.start_time || "15:30",
+      );
+      const endTime = String(payload.end_time || previous?.end_time || "23:30");
+      shiftHours(startTime, endTime);
       next.employees = next.employees
         .filter((e) => e.id !== item.id)
         .concat(item);
@@ -148,7 +167,24 @@ export function useTeam() {
           employee_id: item.id,
           effective_from: effective,
           weekdays: payload.weekdays as number[],
+          start_time: startTime,
+          end_time: endTime,
         });
+      for (const attendance of next.attendance.filter(
+        (a) => a.employee_id === item.id && !a.voided,
+      )) {
+        const before = scheduleOn(data, item.id, attendance.work_date);
+        const after = scheduleOn(next, item.id, attendance.work_date);
+        if (
+          (before?.start_time || "15:30").slice(0, 5) !==
+            (after?.start_time || "15:30").slice(0, 5) ||
+          (before?.end_time || "23:30").slice(0, 5) !==
+            (after?.end_time || "23:30").slice(0, 5)
+        ) {
+          attendance.approved_ot_seconds = null;
+          attendance.ot_reviewed = false;
+        }
+      }
     } else if (action === "qr") next.qr = { id: crypto.randomUUID() };
     else if (action === "settings")
       next.settings = { wages_category_id: String(payload.category_id) };

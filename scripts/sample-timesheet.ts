@@ -15,6 +15,8 @@ data.schedules = data.employees.map((e, i) => ({
   employee_id: e.id,
   effective_from: "2026-11-01",
   weekdays: [1, 2, 3, 4, 5, 6],
+  start_time: i === 1 ? "05:30" : "15:30",
+  end_time: i === 1 ? "09:30" : "23:30",
 }));
 data.employees[0].name = "Alex Peña Reyes (fictional sample)";
 data.employees[1].name = "María de los Ángeles Santos (fictional sample)";
@@ -24,8 +26,14 @@ for (const e of data.employees)
       id: `${e.id}-${day}`,
       employee_id: e.id,
       work_date: `2026-11-${day}`,
-      clock_in: `2026-11-${day}T${day === "03" ? "08:00" : "07:30"}:00Z`,
-      clock_out: `2026-11-${day}T${day === "04" ? "16:30" : "15:30"}:00Z`,
+      clock_in:
+        e.id === data.employees[1].id
+          ? `2026-11-${day}T${day === "03" ? "06:00" : "05:30"}:00+08:00`
+          : `2026-11-${day}T${day === "03" ? "08:00" : "07:30"}:00Z`,
+      clock_out:
+        e.id === data.employees[1].id
+          ? `2026-11-${day}T${day === "04" ? "10:30" : "09:30"}:00+08:00`
+          : `2026-11-${day}T${day === "04" ? "16:30" : "15:30"}:00Z`,
       ot_reviewed: true,
       approved_ot_seconds: day === "04" ? 3600 : 0,
       correction_reason: "",

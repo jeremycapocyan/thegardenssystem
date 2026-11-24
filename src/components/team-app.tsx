@@ -40,6 +40,9 @@ import {
   employeePeriod,
   payrollEnd,
   duration,
+  shiftLabel,
+  shiftHours,
+  payrollShiftLabel,
   timeInManila,
   type PayrollPreview,
   type StaffRequest,
@@ -362,6 +365,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         [
           "Date",
           "Status",
+          "Scheduled shift (Manila)",
           "Time in (Manila)",
           "Time out (Manila)",
           "Late minutes",
@@ -375,6 +379,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
         ...report.days.map((d) => [
           d.date,
           d.status,
+          payrollShiftLabel(d),
           timeInManila(d.clock_in),
           timeInManila(d.clock_out),
           (d.late_seconds / 60).toFixed(2),
@@ -486,14 +491,14 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
             <Clock size={21} />
             <strong>The daily shift</strong>
             <p>
-              3:30 PM — 11:30 PM
+              Default: 3:30 PM — 11:30 PM
               <br />
-              ₱650 per complete shift
+              Default eight-hour shift · ₱650
             </p>
             <small>
-              Overtime · ₱81.25 / hour
+              Regular / approved overtime · ₱81.25 / hour
               <br />
-              Subject to Jeremy’s approval
+              Overtime requires admin approval
             </small>
           </div>
           <div className="sidebar-profile">
@@ -896,8 +901,8 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     <div>
                       <h2>Employee register</h2>
                       <p>
-                        Default pay: ₱650 · 3:30–11:30 PM. Workdays are
-                        individual.
+                        Default: 3:30–11:30 PM · ₱650. Edit each employee’s
+                        workdays and shift hours at ₱81.25 per hour.
                       </p>
                     </div>
                   </div>
@@ -954,6 +959,10 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                       ][d],
                                   )
                                   .join(", ") || "No workdays"}
+                                <small className="staff-block">
+                                  {schedule &&
+                                    `${shiftLabel(schedule.start_time, schedule.end_time)} · ${money(shiftHours(schedule.start_time, schedule.end_time).cents)} / shift`}
+                                </small>
                                 <small className="staff-block">
                                   {schedule &&
                                     `From ${schedule.effective_from}`}
@@ -1283,7 +1292,12 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                             <tbody>
                               {report.days.map((d) => (
                                 <tr key={d.date}>
-                                  <td>{displayDate(d.date)}</td>
+                                  <td>
+                                    {displayDate(d.date)}
+                                    <small className="staff-block">
+                                      {payrollShiftLabel(d)}
+                                    </small>
+                                  </td>
                                   <td>
                                     <div className="cell-stack">
                                       <span>{timeInManila(d.clock_in)}</span>
@@ -1790,7 +1804,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     ) : (
                       <Blank>Create your first court QR.</Blank>
                     )}
-                    <strong>3:30 PM — 11:30 PM · Asia/Manila</strong>
+                    <strong>Follow your assigned shift · Asia/Manila</strong>
                     <small>
                       Set your PIN once in your employee account. Email sign-in
                       is also available. Scanning alone never records

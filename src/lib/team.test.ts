@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   demoTeam,
+  shiftHours,
+  payrollShiftLabel,
   previewPayroll,
   employeePeriod,
   payrollEnd,
@@ -59,4 +61,77 @@ test("demo payroll preserves server salary, overtime, and centavo rules", () => 
   assert.equal(p.days[1].total_cents, 73125);
   assert.equal(p.gross_cents, 134062);
   assert.equal(p.blockers.length, 0);
+});
+
+test("custom hours pay four-hour shifts, follow effective dates and preserve frozen report labels", () => {
+  const data = demoTeam(),
+    e = data.employees[0];
+  data.cutoff_rules = [];
+  e.started_on = "2020-01-01";
+  data.schedules = [
+    {
+      id: "s",
+      employee_id: e.id,
+      effective_from: "2020-01-01",
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      start_time: "05:30:00",
+      end_time: "09:30:00",
+    },
+    {
+      id: "s2",
+      employee_id: e.id,
+      effective_from: "2020-01-08",
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      start_time: "15:30",
+      end_time: "23:30",
+    },
+  ];
+  data.requests = [];
+  data.attendance = [
+    {
+      id: "a",
+      employee_id: e.id,
+      work_date: "2020-01-01",
+      clock_in: "2020-01-01T05:30:00+08:00",
+      clock_out: "2020-01-01T10:30:00+08:00",
+      approved_ot_seconds: 3600,
+      ot_reviewed: true,
+      correction_reason: "",
+    },
+  ];
+  const preview = previewPayroll(
+    data,
+    e.id,
+    "2020-01-01",
+    new Date("2020-01-03T00:00:00Z"),
+  );
+  assert.equal(preview.days[0].regular_cents, 32500);
+  assert.equal(preview.days[0].ot_cents, 8125);
+  assert.equal(preview.days[0].total_cents, 40625);
+  assert.equal(preview.days[1].deduction_cents, 32500);
+  assert.equal(preview.days[3].status, "Upcoming");
+  assert.equal(preview.days[7].scheduled_cents, 65000);
+  assert.equal(payrollShiftLabel(preview.days[0]), "05:30 - 09:30");
+  const frozen = structuredClone(preview.days[0]);
+  data.schedules[0].start_time = "07:30";
+  assert.equal(payrollShiftLabel(frozen), "05:30 - 09:30");
+  assert.equal(
+    payrollShiftLabel({
+      ...frozen,
+      scheduled_start: undefined,
+      scheduled_end: undefined,
+    }),
+    "15:30 - 23:30",
+  );
+  assert.deepEqual(shiftHours("05:30", "09:30"), {
+    seconds: 14400,
+    cents: 32500,
+  });
+  for (const [start, end] of [
+    ["09:30", "05:30"],
+    ["05:30", "05:30"],
+    ["25:00", "09:30"],
+    ["05:30:01", "09:30"],
+  ])
+    assert.throws(() => shiftHours(start, end));
 });

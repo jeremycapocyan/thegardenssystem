@@ -17,6 +17,8 @@ export interface Schedule {
   employee_id: string;
   effective_from: string;
   weekdays: number[];
+  start_time?: string;
+  end_time?: string;
 }
 export interface ScheduleOverride {
   id: string;
@@ -72,6 +74,10 @@ export interface PayrollDay {
   date: string;
   status: string;
   scheduled: boolean;
+  scheduled_start?: string;
+  scheduled_end?: string;
+  scheduled_seconds?: number;
+  scheduled_cents?: number;
   attendance_id: string | null;
   clock_in: string | null;
   clock_out: string | null;
@@ -163,13 +169,40 @@ export const timeInManila = (timestamp: string | null) =>
     : "—";
 export const duration = (seconds: number) =>
   `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m${Math.floor(seconds % 60) ? ` ${Math.floor(seconds % 60)}s` : ""}`;
+export function scheduleOn(data: TeamData, employeeId: string, date: string) {
+  return data.schedules
+    .filter((s) => s.employee_id === employeeId && s.effective_from <= date)
+    .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+}
+export function shiftHours(start = "15:30", end = "23:30") {
+  const minutes = (time: string) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d(:00)?$/.test(time))
+      throw Error("Choose valid start and finish times.");
+    return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  };
+  const seconds = (minutes(end) - minutes(start)) * 60;
+  if (seconds <= 0)
+    throw Error("Scheduled finish must be later than start on the same day.");
+  return { seconds, cents: Math.round((8125 * seconds) / 3600) };
+}
+export function shiftLabel(start = "15:30", end = "23:30") {
+  const label = (t: string) => {
+    const hour = Number(t.slice(0, 2));
+    return `${hour % 12 || 12}:${t.slice(3, 5)} ${hour < 12 ? "AM" : "PM"}`;
+  };
+  return `${label(start)} – ${label(end)}`;
+}
+// Old finalized snapshots retain the original standard shift.
+export function payrollShiftLabel(day: PayrollDay) {
+  return day.scheduled
+    ? `${day.scheduled_start?.slice(0, 5) || "15:30"} - ${day.scheduled_end?.slice(0, 5) || "23:30"}`
+    : "Rest day";
+}
 export function workingOn(data: TeamData, employee: Employee, date: string) {
   const override = data.overrides.find(
     (o) => o.employee_id === employee.id && o.work_date === date,
   );
-  const schedule = data.schedules
-    .filter((s) => s.employee_id === employee.id && s.effective_from <= date)
-    .sort((a, b) => b.effective_from.localeCompare(a.effective_from))[0];
+  const schedule = scheduleOn(data, employee.id, date);
   return (
     date >= employee.started_on &&
     (!employee.ended_on || date <= employee.ended_on) &&
@@ -212,8 +245,14 @@ export function previewPayroll(
         r.start_date! <= date &&
         r.end_date! >= date,
     );
-    const shiftStart = new Date(`${date}T15:30:00+08:00`).valueOf(),
-      shiftEnd = shiftStart + 28800000;
+    const schedule = scheduleOn(data, eid, date);
+    const scheduled_start = schedule?.start_time?.slice(0, 5) || "15:30";
+    const scheduled_end = schedule?.end_time?.slice(0, 5) || "23:30";
+    const shift = shiftHours(scheduled_start, scheduled_end);
+    const shiftStart = new Date(
+        `${date}T${scheduled_start}:00+08:00`,
+      ).valueOf(),
+      shiftEnd = shiftStart + shift.seconds * 1000;
     let status = scheduled ? "Upcoming" : "Rest day",
       regular_seconds = 0,
       overtime_seconds = 0,
@@ -239,7 +278,7 @@ export function previewPayroll(
         const punchIn = new Date(a.clock_in).valueOf(),
           punchOut = new Date(a.clock_out).valueOf();
         regular_seconds = Math.min(
-          28800,
+          shift.seconds,
           Math.max(
             0,
             (Math.min(punchOut, shiftEnd) - Math.max(punchIn, shiftStart)) /
@@ -247,9 +286,9 @@ export function previewPayroll(
           ),
         );
         deduction_cents = Math.round(
-          (65000 * (28800 - regular_seconds)) / 28800,
+          (8125 * (shift.seconds - regular_seconds)) / 3600,
         );
-        regular_cents = 65000 - deduction_cents;
+        regular_cents = Math.max(0, shift.cents - deduction_cents);
         overtime_seconds = Math.max(
           0,
           (punchOut - Math.max(punchIn, shiftEnd)) / 1000,
@@ -258,7 +297,7 @@ export function previewPayroll(
           overtime_seconds,
           a.approved_ot_seconds || 0,
         );
-        ot_cents = Math.round((65000 * approved_ot_seconds) / 28800);
+        ot_cents = Math.round((8125 * approved_ot_seconds) / 3600);
         if (overtime_seconds && !a.ot_reviewed)
           blockers.push(`${date}: overtime needs approval or rejection.`);
         status =
@@ -271,11 +310,11 @@ export function previewPayroll(
               : "Present";
       }
     } else if (scheduled && leave) {
-      leave_cents = leave.paid_leave ? 65000 : 0;
+      leave_cents = leave.paid_leave ? shift.cents : 0;
       status = `${leave.kind === "sick" ? "Sick leave" : "Leave"} · ${leave.paid_leave ? "paid" : "unpaid"}`;
     } else if (scheduled && shiftEnd <= now.valueOf()) {
       status = "Absent";
-      deduction_cents = 65000;
+      deduction_cents = shift.cents;
     }
     if (
       scheduled &&
@@ -293,6 +332,10 @@ export function previewPayroll(
       date,
       status,
       scheduled,
+      scheduled_start,
+      scheduled_end,
+      scheduled_seconds: shift.seconds,
+      scheduled_cents: shift.cents,
       attendance_id: a?.id || null,
       clock_in: a?.clock_in || null,
       clock_out: a?.clock_out || null,
