@@ -751,7 +751,7 @@ export async function createFinanceReportPdf(
     `Each report month uses its ENTIRE calendar month's net income. Confirmed owner settlements use frozen shares and capital deductions; source changes require admin review. Still payable = gross entitlement less confirmed capital withholding less actual cash payouts through ${r.options.asOf}. Withholding retains funds in Gardens; it is not another expense or cash payment. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
   );
   table(
-    "Cash borrowed from partners — outstanding principal",
+    "Partner advances — Gardens owes partners",
     [
       col("Partner / purpose", 25),
       col("Received / account", 15),
@@ -854,7 +854,7 @@ export async function createFinanceReportPdf(
     "Principal repayments, including unused-fund returns, are separate from owner payouts and do not create expenses.",
   );
   table(
-    "Partner-funded purchases — Gardens owes partners",
+    "Historical partner-paid purchases — reimbursement balances",
     [
       col("Purchase / agreement", 24),
       col("Partner", 12),

@@ -834,6 +834,13 @@ function MovementForm({
         them included in invested capital. Corrections and funding must not
         replace missing income or expense entries.
       </p>
+      {kind === "funding" && (
+        <p className="notice wide">
+          For cash a partner gives The Gardens to repay later, use{" "}
+          <a href="/installments/#partner-cash-advances">Partner Advances</a>.
+          It records the cash and the amount owed together.
+        </p>
+      )}
       <button className="button primary" disabled={busy}>
         Save movement
       </button>

@@ -141,7 +141,7 @@ function Field({
 const titles: Record<FormKind, string> = {
   purchase: "Partner-funded purchase",
   reimburse: "Record reimbursement",
-  funding_draft: "Capital advance to partners",
+  funding_draft: "Add capital funding",
   fund: "Record supplier payment",
   rule: "Set recovery percentage",
   settle: "Confirm monthly owner settlement",
@@ -173,19 +173,23 @@ export function PartnerAdvanceSummary() {
     <section className="panel partner-summary">
       <div>
         <span className="eyebrow">
-          PARTNER ADVANCES · AS OF {displayDate(ws.asOf)}
+          CAPITAL & RECOVERY · AS OF {displayDate(ws.asOf)}
         </span>
-        <h2>Two balances, kept separate.</h2>
+        <h2>Partner capital and recovery</h2>
       </div>
-      <div>
-        <span>Gardens owes partners</span>
-        <strong>{money(owed)}</strong>
-        <Link href="/installments/#partner-advances">View reimbursements</Link>
-      </div>
+      {!!p.purchases.length && (
+        <div>
+          <span>Historical purchase reimbursements owed</span>
+          <strong>{money(owed)}</strong>
+          <Link href="/installments/#legacy-partner-purchases">
+            View historical reimbursements
+          </Link>
+        </div>
+      )}
       <div>
         <span>Partners owe Gardens</span>
         <strong>{money(debts.reduce((n, d) => n + d.remaining, 0))}</strong>
-        <Link href="/owner-payouts/#partner-advances">
+        <Link href="/owner-payouts/#capital-recovery">
           View capital recovery
         </Link>
       </div>
@@ -418,22 +422,12 @@ export function PartnerAdvances({
           bank: 0,
           booking: 0,
         };
-      const cat = data.categories.find(
-        (c) => c.kind === "expense" && c.active,
-      )!.id;
+      const equalization = previewCapitalEqualization(
+        data.partners!,
+        11200000,
+        today,
+      );
       for (const [action, payload] of [
-        [
-          "purchase",
-          {
-            owner: "Genesis",
-            purchased_on: "2026-11-01",
-            name: "SAMPLE Linix Sweeper",
-            category_id: cat,
-            total_cents: 2500000,
-            monthly_cents: 500000,
-            first_due: "2026-11-30",
-          },
-        ],
         [
           "funding_draft",
           {
@@ -441,10 +435,12 @@ export function PartnerAdvances({
             purpose: "SAMPLE capital advance",
             total_cents: 11200000,
             start_month: "2026-11-01",
-            partners: [
-              { owner: "Genesis", amount_cents: 5600000, rate_bps: 5000 },
-              { owner: "Ken", amount_cents: 5600000, rate_bps: 5000 },
-            ],
+            equalize_capital: true,
+            capital_fingerprint: equalization.fingerprint,
+            partners: equalization.allocations.map((a) => ({
+              ...a,
+              rate_bps: 5000,
+            })),
           },
         ],
       ] as [string, Record<string, unknown>][]) {
@@ -465,7 +461,7 @@ export function PartnerAdvances({
       );
       ws.commitDemoFinance(data);
       setNotice(
-        "Fictional purchase and draft funding loaded. No live records were changed.",
+        "Fictional capital recovery draft loaded. No live records were changed.",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to load samples.");
@@ -475,18 +471,26 @@ export function PartnerAdvances({
     }
   }
   return (
-    <section className="panel partner-panel" id="partner-advances">
+    <section
+      className="panel partner-panel"
+      id={
+        section === "capital" ? "capital-recovery" : "historical-reimbursements"
+      }
+    >
+      {section === "capital" && <span id="partner-advances" />}
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">PARTNER ADVANCES</span>
+          <span className="eyebrow">
+            {section === "capital" ? "OWNER CAPITAL" : "HISTORICAL RECORDS"}
+          </span>
           <h2>
             {section === "purchases"
-              ? "Gardens owes partners"
-              : "Capital advances to partners"}
+              ? "Earlier partner-paid purchases"
+              : "Capital recovery"}
           </h2>
           <p>
             {section === "purchases"
-              ? "Record purchases funded by a partner. Only actual reimbursements reduce business profit."
+              ? "Manage existing direct-to-supplier reimbursements. New cash received is recorded in Partner Advances."
               : "Supplier funding reduces account funds. Recovery comes from owner shares and creates no new income."}
           </p>
         </div>
@@ -495,20 +499,18 @@ export function PartnerAdvances({
             <Download size={15} />
             Export CSV
           </button>
-          {admin && (
+          {admin && section === "capital" && (
             <button
               className="button primary"
               disabled={busy}
               onClick={() =>
                 open({
-                  kind: section === "purchases" ? "purchase" : "funding_draft",
+                  kind: "funding_draft",
                 })
               }
             >
               <Plus size={16} />
-              {section === "purchases"
-                ? "Partner-funded purchase"
-                : "Add capital advance"}
+              Add capital funding
             </button>
           )}
         </div>
@@ -523,15 +525,16 @@ export function PartnerAdvances({
           {notice}
         </p>
       )}
-      {ws.mode === "demo" &&
+      {section === "capital" &&
+        ws.mode === "demo" &&
         !p.purchases.length &&
         !p.fundings.length &&
         admin && (
           <div className="notice">
             <p>
-              Try the ₱25,000 sweeper and ₱112,000 capital examples in this
-              isolated sample workspace. Sample opening cash of ₱200,000 is
-              added only if no sample balance is configured.
+              Try a capital recovery example in this isolated sample workspace.
+              Sample opening cash of ₱200,000 is added only if no sample balance
+              is configured.
             </p>
             <button
               className="button secondary"
@@ -1180,7 +1183,11 @@ function PartnerForm({
     >
       <div className="dialog-heading">
         <div>
-          <span className="eyebrow">THE GARDENS · PARTNER ADVANCES</span>
+          <span className="eyebrow">
+            {["purchase", "reimburse", "void_reimbursement"].includes(form.kind)
+              ? "THE GARDENS · HISTORICAL REIMBURSEMENTS"
+              : "THE GARDENS · CAPITAL RECOVERY"}
+          </span>
           <h2 id="partner-form-title">{titles[form.kind]}</h2>
         </div>
         <button

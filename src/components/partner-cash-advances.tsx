@@ -28,8 +28,8 @@ import {
 import { applyPartnerCashDemo } from "@/lib/partner-cash-demo";
 const STORE = "gardens.balances.sample.v1";
 const titles: Record<PartnerCashAction, string> = {
-  receive: "Receive cash advance",
-  purchase: "Record purchase",
+  receive: "Receive partner advance",
+  purchase: "Link an expense (optional)",
   repay: "Record repayment",
   void_receipt: "Correct an advance receipt",
   void_purchase: "Correct a purchase link",
@@ -65,7 +65,7 @@ export function PartnerCashSummary() {
     <section className="panel partner-summary">
       <div>
         <span className="eyebrow">PARTNER CASH ADVANCES</span>
-        <h2>Cash borrowed from partners</h2>
+        <h2>Gardens owes partners</h2>
         <p>As of {displayDate(ws.asOf)}</p>
       </div>
       <div>
@@ -100,7 +100,15 @@ export function PartnerCashAdvances() {
     } | null>(null),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [showClosed, setShowClosed] = useState(false);
+  const visible = p.advances.filter(
+    (a) =>
+      showClosed ||
+      (!a.voided_at &&
+        (a.received_on > ws.asOf ||
+          partnerCashSummary(p, a, ws.asOf).remaining > 0)),
+  );
   async function open(action: PartnerCashAction, record?: string) {
     if (loading) return;
     setLoading(true);
@@ -139,13 +147,14 @@ export function PartnerCashAdvances() {
   }
   return (
     <section className="panel partner-panel" id="partner-cash-advances">
+      <span id="partner-advances" />
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">PARTNER ADVANCES</span>
-          <h2>Cash received from partner</h2>
+          <span className="eyebrow">GARDENS OWES THE PARTNER</span>
+          <h2>Partner Advances</h2>
           <p>
-            Track borrowed cash, purchases and separate repayments. Only
-            purchases create expenses.
+            Record cash a partner gives The Gardens for expenses, then track
+            what has been repaid and what is still owed.
           </p>
         </div>
         <div className="button-row">
@@ -174,17 +183,29 @@ export function PartnerCashAdvances() {
         </p>
       )}
       <p className="partner-help">
-        Balances as of {displayDate(ws.asOf)}. Repayments do not reduce profit
-        or owner shares. Dates and payments are entered manually.
+        Receive advance → record purchases in{" "}
+        <Link href="/expenses/">Expenses</Link> → record repayment here.
+        Receiving and repaying an advance update Cash or Bank automatically. You
+        do not need a separate fund movement.
       </p>
+      <div className="partner-cash-controls">
+        <span>Balances as of {displayDate(ws.asOf)}</span>
+        <label>
+          <input
+            type="checkbox"
+            checked={showClosed}
+            onChange={(e) => setShowClosed(e.target.checked)}
+          />
+          Show repaid and voided advances
+        </label>
+      </div>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
               <th>Partner / purpose</th>
               <th>Received</th>
-              <th>Principal</th>
-              <th>Linked purchases</th>
+              <th>Cash received</th>
               <th>Repaid</th>
               <th>Still owed</th>
               <th>Next due / overdue</th>
@@ -192,7 +213,7 @@ export function PartnerCashAdvances() {
             </tr>
           </thead>
           <tbody>
-            {p.advances.map((a) => {
+            {visible.map((a) => {
               const s = partnerCashSummary(p, a, ws.asOf);
               return (
                 <tr key={a.id}>
@@ -209,7 +230,6 @@ export function PartnerCashAdvances() {
                     <small>{a.detail.reference}</small>
                   </td>
                   <td>{money(a.amount_cents)}</td>
-                  <td>{money(s.spent)}</td>
                   <td>{money(s.repaid)}</td>
                   <td>
                     <strong>{money(s.remaining)}</strong>
@@ -237,38 +257,44 @@ export function PartnerCashAdvances() {
                   <td>
                     {admin && !a.voided_at && (
                       <div className="partner-actions">
-                        <button
-                          className="button secondary"
-                          disabled={loading}
-                          onClick={() => void open("purchase", a.id)}
-                        >
-                          Record purchase
-                        </button>
-                        <button
-                          className="button secondary"
-                          disabled={loading}
-                          onClick={() => void open("repay", a.id)}
-                        >
-                          Record repayment
-                        </button>
-                        <button
-                          className="button secondary"
-                          disabled={loading}
-                          onClick={() => void open("void_receipt", a.id)}
-                        >
-                          Correct receipt
-                        </button>
+                        {partnerCashSummary(p, a, todayInManila()).remaining >
+                          0 && (
+                          <button
+                            className="button secondary"
+                            disabled={loading}
+                            onClick={() => void open("repay", a.id)}
+                          >
+                            Record repayment
+                          </button>
+                        )}
+                        <details className="partner-cash-more">
+                          <summary>More options</summary>
+                          <button
+                            className="text-button"
+                            disabled={loading}
+                            onClick={() => void open("purchase", a.id)}
+                          >
+                            Link an existing expense (optional)
+                          </button>
+                          <button
+                            className="button secondary"
+                            disabled={loading}
+                            onClick={() => void open("void_receipt", a.id)}
+                          >
+                            Correct receipt
+                          </button>
+                        </details>
                       </div>
                     )}
                   </td>
                 </tr>
               );
             })}
-            {!p.advances.length && (
+            {!visible.length && (
               <tr>
-                <td colSpan={8}>
-                  No cash advances recorded. Receiving an advance does not
-                  record a purchase.
+                <td colSpan={7}>
+                  No outstanding partner advances. Use Receive advance when a
+                  partner gives The Gardens cash to repay later.
                 </td>
               </tr>
             )}
@@ -276,7 +302,7 @@ export function PartnerCashAdvances() {
         </table>
       </div>
       <details className="cash-advance-history">
-        <summary>Purchase and repayment history</summary>
+        <summary>Repayment history and optional expense links</summary>
         <div className="table-scroll">
           <table className="data-table">
             <thead>
@@ -360,7 +386,7 @@ export function PartnerCashAdvances() {
               ))}
               {!p.spends.length && !p.repayments.length && (
                 <tr>
-                  <td colSpan={6}>No linked purchases or repayments.</td>
+                  <td colSpan={6}>No repayments or expense links yet.</td>
                 </tr>
               )}
             </tbody>
@@ -368,9 +394,9 @@ export function PartnerCashAdvances() {
         </div>
       </details>
       <p className="partner-help">
-        “Linked purchases” shows documented use of the advance, not a separate
-        cash balance. You can return unused funds using Record repayment. No
-        automatic offset against profit shares or capital.
+        The amount owed changes only when you repay the partner. A purchase is
+        recorded once in Expenses. Repayments are not additional expenses and do
+        not change capital or profit shares.
       </p>
       {form && (
         <CashAdvanceForm
@@ -380,7 +406,11 @@ export function PartnerCashAdvances() {
           onSaved={async () => {
             setForm(null);
             setNotice(
-              "Saved. The receipt, purchase and repayment remain linked without duplicate entries.",
+              form.action === "receive"
+                ? "Advance received. The Gardens now owes this amount to the partner."
+                : form.action === "repay"
+                  ? "Repayment recorded. The amount owed and account funds have been reduced."
+                  : "Saved. The linked record has been updated.",
             );
             if (ws.mode === "live") await ws.refresh();
           }}
@@ -409,7 +439,7 @@ function CashAdvanceForm({
     retry = useRef<{ key: string; id: string } | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [link, setLink] = useState(false),
+    [link, setLink] = useState(action === "purchase"),
     [source, setSource] = useState(""),
     [allocation, setAllocation] = useState(""),
     [schedule, setSchedule] = useState("single");
@@ -608,30 +638,29 @@ function CashAdvanceForm({
               </>
             ) : (
               <>
-                <Field label="Entry method" wide>
-                  <select
-                    value={link ? "existing" : "new"}
-                    onChange={(e) => {
-                      setLink(e.target.value === "existing");
-                      setSource("");
-                      setAllocation("");
-                    }}
+                {action !== "purchase" && candidates.length > 0 && (
+                  <Field
+                    label="Already recorded this cash movement? (optional)"
+                    wide
                   >
-                    <option value="new">
-                      Create new{" "}
-                      {action === "receive"
-                        ? "receipt"
-                        : action === "repay"
-                          ? "repayment"
-                          : "purchase expense"}
-                    </option>
-                    <option value="existing">
-                      Link existing{" "}
-                      {action === "purchase" ? "expense" : "fund movement"} — do
-                      not post again
-                    </option>
-                  </select>
-                </Field>
+                    <select
+                      value={link ? "existing" : "new"}
+                      onChange={(e) => {
+                        setLink(e.target.value === "existing");
+                        setSource("");
+                        setAllocation("");
+                      }}
+                    >
+                      <option value="new">
+                        Create new{" "}
+                        {action === "receive" ? "receipt" : "repayment"}
+                      </option>
+                      <option value="existing">
+                        Link existing fund movement — do not post again
+                      </option>
+                    </select>
+                  </Field>
+                )}
                 {action === "receive" && (
                   <>
                     <Field label="Partner">
@@ -781,6 +810,13 @@ function CashAdvanceForm({
                       inputMode="decimal"
                       required
                       placeholder="25,000.00"
+                      defaultValue={
+                        action === "repay" && a
+                          ? (
+                              partnerCashSummary(p, a, today).remaining / 100
+                            ).toFixed(2)
+                          : undefined
+                      }
                     />
                   </Field>
                 )}
@@ -872,7 +908,7 @@ function CashAdvanceForm({
                     ? "Creates debt and one cash inflow. No income, expense, capital credit or owner-share deduction."
                     : action === "repay"
                       ? "Reduces debt and cash once. No additional expense or owner payout. Partial payments and returns of unused money are supported."
-                      : "Records the purchase expense once. The amount owed to the partner does not change."}
+                      : "Links an existing expense without creating another expense. The amount owed to the partner does not change."}
                 </p>
                 <label className="partner-check wide">
                   <input type="checkbox" required />I reviewed the amount, date,

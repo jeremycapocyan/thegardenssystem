@@ -689,16 +689,26 @@ export function FinanceApp({ view }: { view: View }) {
     label: string,
     term?: Editor["term"],
   ) =>
-    (kind === "installments" &&
-      ws.data.partners?.purchases.some((p) => p.id === record.id)) ||
-    (kind === "expenses" &&
-      ws.data.partners?.purchases.some(
-        (p) =>
-          p.id ===
-          ws.data.expenses.find((e) => e.id === record.id)?.installment_id,
-      )) ? (
-      <Link className="text-link" href="/installments/#partner-advances">
-        Partner advances
+    kind === "expenses" &&
+    ws.data.partner_cash?.spends.some(
+      (s) => s.expense_id === record.id && !s.voided_at,
+    ) ? (
+      <Link className="text-link" href="/installments/#partner-cash-advances">
+        Partner advance
+      </Link>
+    ) : (kind === "installments" &&
+        ws.data.partners?.purchases.some((p) => p.id === record.id)) ||
+      (kind === "expenses" &&
+        ws.data.partners?.purchases.some(
+          (p) =>
+            p.id ===
+            ws.data.expenses.find((e) => e.id === record.id)?.installment_id,
+        )) ? (
+      <Link
+        className="text-link"
+        href="/installments/#legacy-partner-purchases"
+      >
+        Historical reimbursement
       </Link>
     ) : record.staff_payment_id ? (
       <span className="badge neutral">Payroll linked</span>
@@ -1036,8 +1046,17 @@ export function FinanceApp({ view }: { view: View }) {
             </div>
             <div className="heading-actions">
               {(view === "installments" || view === "payouts") && (
-                <a className="button secondary" href="#partner-advances">
-                  Partner advances
+                <a
+                  className="button secondary"
+                  href={
+                    view === "installments"
+                      ? "#partner-cash-advances"
+                      : "#capital-recovery"
+                  }
+                >
+                  {view === "installments"
+                    ? "Partner advances"
+                    : "Capital recovery"}
                 </a>
               )}
               {view === "income" && admin && (
@@ -1577,7 +1596,19 @@ export function FinanceApp({ view }: { view: View }) {
           {view === "installments" && (
             <>
               <PartnerCashAdvances />
-              <PartnerAdvances section="purchases" month={month} />
+              {!!ws.data.partners?.purchases.length && (
+                <details
+                  className="panel legacy-partner-history"
+                  id="legacy-partner-purchases"
+                >
+                  <summary>Historical partner-paid purchases</summary>
+                  <p>
+                    Earlier direct-to-supplier reimbursements remain here.
+                    Record new cash received using Partner Advances above.
+                  </p>
+                  <PartnerAdvances section="purchases" month={month} />
+                </details>
+              )}
               <div className="section-heading tracker-heading">
                 <div>
                   <h2>Keep the finish line in sight.</h2>
@@ -1716,7 +1747,7 @@ export function FinanceApp({ view }: { view: View }) {
                   <div className="error-box partner-month-warning">
                     Recorded income or expenses changed after this month was
                     confirmed. Owner shares and capital deductions still use the
-                    saved settlement. Review it in Partner advances.
+                    saved settlement. Review it in Capital recovery.
                   </div>
                 )}
                 {ownerBalances.map((o, i) => (
