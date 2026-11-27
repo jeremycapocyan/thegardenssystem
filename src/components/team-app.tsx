@@ -1503,8 +1503,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                     <div>
                       <h2>{admin ? "Team requests" : "My requests"}</h2>
                       <p>
-                        Approvals and actual cash releases are tracked
-                        separately.
+                        Approvals and actual payments are tracked separately.
                       </p>
                     </div>
                     {admin ? (
@@ -1633,7 +1632,7 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                               })
                                             }
                                           >
-                                            Release cash
+                                            Record advance release
                                           </button>
                                         )}
                                       {r.status === "approved" &&
