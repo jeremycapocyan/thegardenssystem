@@ -310,6 +310,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     },
     async save(collection, values) {
       assertAdmin();
+      if (collection === "income") {
+        const existing = data.income.find((row) => row.id === values.id);
+        if (existing?.onda_key)
+          throw Error(
+            "This entry is managed by Onda. Upload its report to update it.",
+          );
+        // Reuse the retained daily row when adding manual income after conversion.
+        const residual =
+          !existing &&
+          data.income.find(
+            (row) =>
+              row.onda_split &&
+              row.onda_hidden &&
+              row.business_date === values.business_date &&
+              row.category_id === values.category_id,
+          );
+        if (residual) values = { ...values, id: residual.id };
+      }
       if (mode === "demo") {
         guardPartnerManual(data, collection, values);
         guardPartnerCashManual(data, collection, values.id);
@@ -319,6 +337,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           items.some(
             (row) =>
               row.id !== values.id &&
+              !row.onda_key &&
               row.business_date === values.business_date &&
               row.category_id === values.category_id,
           )
@@ -330,7 +349,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         commitDemo({
           ...data,
           [collection]: exists
-            ? items.map((row) => (row.id === values.id ? values : row))
+            ? items.map((row) =>
+                row.id === values.id
+                  ? {
+                      ...row,
+                      ...values,
+                      ...(collection === "income" && row.onda_split
+                        ? { onda_hidden: values.amount_cents === 0 }
+                        : {}),
+                    }
+                  : row,
+              )
             : [...items, values],
         });
         return;
@@ -342,6 +371,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await finishSave();
     },
     async remove(collection, id) {
+      if (
+        collection === "income" &&
+        data.income.some((i) => i.id === id && (i.onda_key || i.onda_split))
+      )
+        throw Error(
+          "Onda-linked records retain their history. Edit the manual amount or update the source report instead.",
+        );
       if (mode === "demo") guardPartnerCashManual(data, collection, id);
       if (
         mode === "demo" &&

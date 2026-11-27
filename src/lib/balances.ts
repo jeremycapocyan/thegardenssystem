@@ -14,6 +14,7 @@ export interface CashSettings {
   booking: number;
 }
 export interface CashAllocation {
+  onda_key?: string | null;
   posted_on?: string;
   id: string;
   account: CashAccount;
@@ -46,33 +47,35 @@ export function signedMoney(input: string) {
 export function cashEntries(data: CashData, asOf?: string) {
   return (["income", "expenses", "payouts"] as const)
     .flatMap((kind) =>
-      data.finance[kind].map((row) => {
-        const date = "business_date" in row ? row.business_date : row.paid_on;
-        const label =
-          "owner" in row
-            ? `${row.owner} · Owner payout`
-            : data.finance.categories.find((c) => c.id === row.category_id)
-                ?.name || "Unknown category";
-        const allocations = data.allocations.filter(
-          (a) =>
-            allocationRecord(a) === row.id &&
-            allocationKind(a) === kind &&
-            (!asOf || (a.posted_on || date) <= asOf),
-        );
-        const assigned = allocations.reduce((n, a) => n + a.amount_cents, 0);
-        return {
-          id: row.id,
-          kind,
-          date,
-          label,
-          notes: row.notes,
-          reference: "reference" in row ? row.reference : "",
-          amount: row.amount_cents,
-          assigned,
-          unassigned: row.amount_cents - assigned,
-          allocations,
-        };
-      }),
+      data.finance[kind]
+        .filter((row) => !("onda_hidden" in row && row.onda_hidden))
+        .map((row) => {
+          const date = "business_date" in row ? row.business_date : row.paid_on;
+          const label =
+            "owner" in row
+              ? `${row.owner} · Owner payout`
+              : data.finance.categories.find((c) => c.id === row.category_id)
+                  ?.name || "Unknown category";
+          const allocations = data.allocations.filter(
+            (a) =>
+              allocationRecord(a) === row.id &&
+              allocationKind(a) === kind &&
+              (!asOf || (a.posted_on || date) <= asOf),
+          );
+          const assigned = allocations.reduce((n, a) => n + a.amount_cents, 0);
+          return {
+            id: row.id,
+            kind,
+            date,
+            label,
+            notes: row.notes,
+            reference: "reference" in row ? row.reference : "",
+            amount: row.amount_cents,
+            assigned,
+            unassigned: row.amount_cents - assigned,
+            allocations,
+          };
+        }),
     )
     .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
 }

@@ -32,6 +32,12 @@ export interface Category {
   active: boolean;
 }
 export interface Income {
+  onda_key?: string | null;
+  onda_reference?: string | null;
+  payment_method?: string | null;
+  payment_account?: "cash" | "bank" | "booking" | null;
+  onda_hidden?: boolean;
+  onda_split?: boolean;
   id: string;
   business_date: string;
   category_id: string;

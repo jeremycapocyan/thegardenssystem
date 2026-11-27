@@ -1,3 +1,7 @@
+import {
+  buildOndaAccountPreview,
+  type OndaAccountContext,
+} from "./onda-accounts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -471,6 +475,320 @@ test("Onda database confirmation permissions, immutable evidence, conflicts and 
         ).rows.length,
         1,
       );
+    },
+  );
+  await t.test(
+    "transaction encoding preserves totals, posts Cash and Booking once, and safely upgrades daily imports",
+    async () => {
+      const r = report(
+        [
+          tx("BK-TRANS01", "2021-01-01", 90000),
+          tx("ER-TRANS02", "2021-01-01", 30000, { method: "Cash" }),
+        ],
+        [refund("BK-TRANS01", "2021-01-02", 10000)],
+      );
+      const stageV2 = async (source = r) => {
+        const c = (await context()) as OndaAccountContext,
+          plan = buildOndaAccountPreview(source, c),
+          id = randomUUID();
+        assert.deepEqual(plan.blockers, []);
+        const hash = createHash("sha256").update(id).digest("hex");
+        await service(() =>
+          db.query(
+            "select garden_onda_prepare($1,$2,$3,'Transactions.pdf',1000,$4,$5,$6)",
+            [
+              admin,
+              id,
+              hash,
+              JSON.stringify(source),
+              JSON.stringify(plan),
+              c.fingerprint,
+            ],
+          ),
+        );
+        return { id, plan };
+      };
+      const encode = (
+        id: string,
+        choices: Record<string, unknown> = {},
+        accounts: Record<string, string> = {},
+        replace = true,
+      ) =>
+        service(() =>
+          db.query<any>(
+            "select garden_onda_confirm_transactions($1,$2,$3,$4,$5) v",
+            [
+              admin,
+              id,
+              JSON.stringify(choices),
+              JSON.stringify(accounts),
+              replace,
+            ],
+          ),
+        );
+      r.start = "2021-01-01";
+      r.end = "2021-01-02";
+      r.generatedAt = "2021-01-03T04:00:00Z";
+      const legacy = await stage(r);
+      await confirm(legacy.id);
+      const oldTotal = (
+        await db.query<any>(
+          "select sum(amount_cents)::text n from garden_income",
+        )
+      ).rows[0].n;
+      const c1 = await context();
+      const oldId = c1.links.find(
+        (l) => l.business_date === "2021-01-01" && l.source_amount === 90000,
+      )!.income_id;
+      await as(admin, () =>
+        db.query("select garden_cash_allocate($1,'income',$2,'cash',90000)", [
+          randomUUID(),
+          oldId,
+        ]),
+      );
+      const preview = await stageV2();
+      assert.equal(preview.plan.entries.length, 3);
+      assert.equal(preview.plan.replaced_allocations, 1);
+      await assert.rejects(
+        encode(preview.id, {}, {}, false),
+        /Review replacement/,
+      );
+      await encode(preview.id);
+      await encode(preview.id);
+      assert.equal(
+        (
+          await db.query<any>(
+            "select sum(amount_cents)::text n from garden_income",
+          )
+        ).rows[0].n,
+        oldTotal,
+      );
+      assert.equal(
+        (
+          await db.query<any>(
+            "select amount_cents::text n,onda_hidden from garden_income where id=$1",
+            [oldId],
+          )
+        ).rows[0].n,
+        "0",
+      );
+      let rows = (
+        await db.query<any>(
+          "select i.id,i.onda_key,i.amount_cents::int,a.account,a.amount_cents::int assigned from garden_income i left join garden_cash_allocations a on a.income_id=i.id where i.onda_key in ('tx:BK-TRANS01','tx:ER-TRANS02','refund:BK-TRANS01/2021-01-02/10000/1') order by i.onda_key",
+        )
+      ).rows;
+      assert.equal(rows.length, 3);
+      assert.equal(
+        rows.find((x) => x.onda_key === "tx:BK-TRANS01").account,
+        "booking",
+      );
+      assert.equal(
+        rows.find((x) => x.onda_key === "tx:ER-TRANS02").account,
+        "cash",
+      );
+      assert.equal(
+        rows.find((x) => x.onda_key.startsWith("refund:")).assigned,
+        -10000,
+      );
+      const ids = rows.map((x) => x.id).sort();
+      const repeat = await stageV2();
+      assert.equal(
+        repeat.plan.proposals.some((p) => p.conflict),
+        false,
+      );
+      await encode(repeat.id);
+      rows = (
+        await db.query<any>(
+          "select id from garden_income where onda_key in ('tx:BK-TRANS01','tx:ER-TRANS02','refund:BK-TRANS01/2021-01-02/10000/1')",
+        )
+      ).rows;
+      assert.deepEqual(rows.map((x) => x.id).sort(), ids);
+      await as(admin, () =>
+        db.query("update garden_income set amount_cents=12345 where id=$1", [
+          oldId,
+        ]),
+      );
+      assert.equal(
+        (
+          await db.query<any>(
+            "select onda_hidden from garden_income where id=$1",
+            [oldId],
+          )
+        ).rows[0].onda_hidden,
+        false,
+      );
+      await as(admin, () =>
+        db.query("update garden_income set amount_cents=0 where id=$1", [
+          oldId,
+        ]),
+      );
+      assert.equal(
+        (
+          await db.query<any>(
+            "select onda_hidden from garden_income where id=$1",
+            [oldId],
+          )
+        ).rows[0].onda_hidden,
+        true,
+      );
+      await assert.rejects(
+        as(admin, () =>
+          db.query("update garden_income set amount_cents=1 where id=$1", [
+            ids[0],
+          ]),
+        ),
+        (e: any) => e.code === "42501",
+      );
+      const newer = report(
+        [
+          tx("BK-TRANS01", "2021-01-01", 80000),
+          tx("ER-TRANS02", "2021-01-01", 30000, { method: "Cash" }),
+        ],
+        [refund("BK-TRANS01", "2021-01-02", 10000)],
+        {
+          start: "2021-01-01",
+          end: "2021-01-02",
+          generatedAt: "2021-01-04T04:00:00Z",
+        },
+      );
+      const correction = await stageV2(newer);
+      await encode(correction.id);
+      assert.equal(
+        (
+          await db.query<any>(
+            "select amount_cents::int n from garden_income where onda_key='tx:BK-TRANS01'",
+          )
+        ).rows[0].n,
+        80000,
+      );
+      const older = await stageV2();
+      assert(older.plan.olderIgnored > 0);
+      await encode(older.id);
+      assert.equal(
+        (
+          await db.query<any>(
+            "select amount_cents::int n from garden_income where onda_key='tx:BK-TRANS01'",
+          )
+        ).rows[0].n,
+        80000,
+      );
+      await assert.rejects(
+        as(viewer, () => db.query("select * from garden_onda_entry_links")),
+        (e: any) => e.code === "42501",
+      );
+      const withManual = await stageV2({
+        ...newer,
+        generatedAt: "2021-01-05T04:00:00Z",
+      });
+      await encode(
+        withManual.id,
+        { "2021-01-01/BK": { mode: "manual", amount_cents: 500 } },
+        { "manual:2021-01-01/BK": "bank" },
+      );
+      assert.equal(
+        (
+          await db.query<any>(
+            "select amount_cents::int n from garden_income where id=$1",
+            [oldId],
+          )
+        ).rows[0].n,
+        500,
+      );
+      assert.equal(
+        (
+          await db.query<any>(
+            "select amount_cents::int n,account from garden_cash_allocations where income_id=$1",
+            [oldId],
+          )
+        ).rows[0].account,
+        "bank",
+      );
+      const cancelled = await stageV2({
+        ...newer,
+        generatedAt: "2021-01-06T04:00:00Z",
+        transactions: newer.transactions.map((t) =>
+          t.reference === "BK-TRANS01" ? { ...t, status: "Cancelled" } : t,
+        ),
+      });
+      await encode(cancelled.id, {}, { "manual:2021-01-01/BK": "bank" });
+      const removed = (
+        await db.query<any>(
+          "select i.id,i.onda_hidden,i.amount_cents::int n,count(a.id)::int assignments from garden_income i left join garden_cash_allocations a on a.income_id=i.id where i.onda_key='tx:BK-TRANS01' group by i.id",
+        )
+      ).rows[0];
+      assert.equal(removed.onda_hidden, true);
+      assert.equal(removed.n, 0);
+      assert.equal(removed.assignments, 0);
+      assert(ids.includes(removed.id));
+      await assert.rejects(
+        as(admin, () =>
+          db.query(
+            "select garden_onda_confirm_transactions($1,$2,'{}','{}',true)",
+            [admin, randomUUID()],
+          ),
+        ),
+        (e: any) => e.code === "42501",
+      );
+    },
+  );
+  await t.test(
+    "transaction previews reject stale saves and unknown destinations without partial income/account writes",
+    async () => {
+      const r = report(
+        [tx("BK-UNKNOWN1", "2021-02-01", 50000, { method: "Maya" })],
+        [],
+        {
+          start: "2021-02-01",
+          end: "2021-02-01",
+          generatedAt: "2021-02-02T04:00:00Z",
+        },
+      );
+      const c = (await context()) as OndaAccountContext,
+        plan = buildOndaAccountPreview(r, c),
+        id = randomUUID();
+      await service(() =>
+        db.query(
+          "select garden_onda_prepare($1,$2,$3,'Unknown.pdf',1000,$4,$5,$6)",
+          [
+            admin,
+            id,
+            createHash("sha256").update(id).digest("hex"),
+            JSON.stringify(r),
+            JSON.stringify(plan),
+            c.fingerprint,
+          ],
+        ),
+      );
+      const count = async () =>
+        (
+          await db.query<any>(
+            "select (select count(*)::int from garden_income) income,(select count(*)::int from garden_cash_allocations) allocations",
+          )
+        ).rows[0];
+      const before = await count();
+      await assert.rejects(
+        service(() =>
+          db.query(
+            "select garden_onda_confirm_transactions($1,$2,'{}','{}',true)",
+            [admin, id],
+          ),
+        ),
+        /Choose an account/,
+      );
+      assert.deepEqual(await count(), before);
+      await db.query(
+        "update garden_income set notes=notes||' test edit' where id=(select id from garden_income where onda_key is null and not onda_split limit 1)",
+      );
+      await assert.rejects(
+        service(() =>
+          db.query(
+            "select garden_onda_confirm_transactions($1,$2,'{}',$3,true)",
+            [admin, id, JSON.stringify({ "tx:BK-UNKNOWN1": "bank" })],
+          ),
+        ),
+        /changed after preview/,
+      );
+      assert.deepEqual(await count(), before);
     },
   );
   await t.test(

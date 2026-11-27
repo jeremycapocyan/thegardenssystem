@@ -648,7 +648,7 @@ export async function createFinanceReportPdf(
           i.business_date,
           category(i.category_id),
           money(i.amount_cents),
-          i.notes || "-",
+          `${i.notes || "-"}${i.payment_account ? "\nAccount: " + ACCOUNTS[i.payment_account] : ""}`,
         ),
       ),
       { cells: ["TOTAL INCOME", "", money(r.cash.income), ""], total: true },
@@ -1232,7 +1232,11 @@ export async function createFinanceReportPdf(
               `${e.label}\n${e.reference || e.notes}`,
               ACCOUNTS[a.account],
               money(a.amount_cents),
-              e.kind === "income" ? "In" : "Out",
+              e.kind === "income"
+                ? a.amount_cents < 0
+                  ? "Refund correction"
+                  : "In"
+                : "Out",
             ),
           ),
         ),

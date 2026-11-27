@@ -119,7 +119,7 @@ const headings: Record<View, { title: string; subtitle: string }> = {
   },
   income: {
     title: "Income",
-    subtitle: "Close the day with one total for each income category.",
+    subtitle: "Track individual Onda payments and manual income totals.",
   },
   expenses: {
     title: "Expenses",
@@ -593,8 +593,10 @@ export function FinanceApp({ view }: { view: View }) {
         .includes(query.toLowerCase()),
     );
   const filteredIncome = ws.data.income
+    .filter((r) => !r.onda_hidden)
     .filter(
       (r) =>
+        !r.onda_hidden &&
         inRange(r.business_date, range.start, range.end) &&
         (!categoryFilter || r.category_id === categoryFilter) &&
         matches(categoryName(r.category_id), r.notes),
@@ -649,7 +651,10 @@ export function FinanceApp({ view }: { view: View }) {
     }));
   const recent = [
     ...ws.data.income
-      .filter((r) => inRange(r.business_date, range.start, range.end))
+      .filter(
+        (r) =>
+          !r.onda_hidden && inRange(r.business_date, range.start, range.end),
+      )
       .map((r) => ({
         id: r.id,
         date: r.business_date,
@@ -769,11 +774,22 @@ export function FinanceApp({ view }: { view: View }) {
     let rows: (string | number)[][] = [];
     if (view === "income")
       rows = [
-        ["Date", "Category", "Amount (PHP)", "Notes"],
+        [
+          "Date",
+          "Category",
+          "Amount (PHP)",
+          "Reference",
+          "Method",
+          "Account",
+          "Notes",
+        ],
         ...filteredIncome.map((r) => [
           r.business_date,
           categoryName(r.category_id),
           (r.amount_cents / 100).toFixed(2),
+          r.onda_reference || "",
+          r.payment_method || "",
+          r.payment_account || "",
           r.notes,
         ]),
       ];
@@ -1192,7 +1208,7 @@ export function FinanceApp({ view }: { view: View }) {
                 <Stat
                   label="Total income"
                   value={summary.income}
-                  note={`${ws.data.income.filter((r) => inRange(r.business_date, range.start, range.end)).length} income entries in this period`}
+                  note={`${ws.data.income.filter((r) => !r.onda_hidden && inRange(r.business_date, range.start, range.end)).length} income entries in this period`}
                   icon={ArrowDownLeft}
                 />
                 <Stat
@@ -1386,9 +1402,17 @@ export function FinanceApp({ view }: { view: View }) {
                       </div>,
                       displayDate(r.date),
                       <Badge>{r.income ? "Income" : "Expense"}</Badge>,
-                      <strong className={r.income ? "positive" : ""}>
-                        {r.income ? "+" : "−"}
-                        {money(r.amount)}
+                      <strong
+                        className={
+                          r.income
+                            ? r.amount < 0
+                              ? "negative"
+                              : "positive"
+                            : ""
+                        }
+                      >
+                        {r.income && r.amount >= 0 ? "+" : "−"}
+                        {money(Math.abs(r.amount))}
                       </strong>,
                     ],
                   }))}
@@ -1409,7 +1433,7 @@ export function FinanceApp({ view }: { view: View }) {
                   value={view === "income" ? summary.income : summary.expense}
                   note={
                     view === "income"
-                      ? "One category total per business day"
+                      ? "Onda imports are recorded per transaction"
                       : "Owner payouts are recorded separately"
                   }
                   icon={view === "income" ? ArrowDownLeft : ArrowUpRight}
@@ -1420,12 +1444,12 @@ export function FinanceApp({ view }: { view: View }) {
                   <div>
                     <h3>
                       {view === "income"
-                        ? "A simple daily close."
+                        ? "Every transaction, clearly recorded."
                         : "One payment, one entry."}
                     </h3>
                     <p>
                       {view === "income"
-                        ? "Enter each category’s end-of-day total. The dashboard adds everything together."
+                        ? "Upload an Onda PDF to record individual transactions and their accounts. Manual end-of-day totals remain available."
                         : "Select Fixed bill or Installment to link a payment. Leave everyday costs under Operating expense."}
                     </p>
                   </div>
@@ -1472,6 +1496,8 @@ export function FinanceApp({ view }: { view: View }) {
                     columns={[
                       { label: "Business date" },
                       { label: "Category" },
+                      { label: "Reference / method" },
+                      { label: "Account" },
                       { label: "Notes" },
                       { label: "Amount", number: true },
                       { label: "", number: true },
@@ -1481,11 +1507,34 @@ export function FinanceApp({ view }: { view: View }) {
                       cells: [
                         displayDate(r.business_date),
                         <strong>{categoryName(r.category_id)}</strong>,
+                        <span>
+                          {r.onda_reference || "Manual total"}
+                          <small className="staff-block">
+                            {r.payment_method || ""}
+                          </small>
+                        </span>,
+                        <span>
+                          {r.payment_account
+                            ? {
+                                cash: "Cash",
+                                bank: "Bank",
+                                booking: "Booking System",
+                              }[r.payment_account]
+                            : "Assign in Cash & balances"}
+                        </span>,
                         <span className="cell-notes">{r.notes || "—"}</span>,
-                        <strong className="positive">
+                        <strong
+                          className={
+                            r.amount_cents < 0 ? "negative" : "positive"
+                          }
+                        >
                           {money(r.amount_cents)}
                         </strong>,
-                        actions("income", r, "income entry"),
+                        r.onda_key ? (
+                          <small>Managed by Onda PDF</small>
+                        ) : (
+                          actions("income", r, "income entry")
+                        ),
                       ],
                     }))}
                   />

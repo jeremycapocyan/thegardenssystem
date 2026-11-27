@@ -51,6 +51,8 @@ export interface OndaLink {
   generated_notes: string;
 }
 export interface OndaContext {
+  entries?: import("./onda-accounts").OndaEntryLink[];
+  settings?: import("./balances").CashSettings | null;
   fingerprint: string;
   income: Income[];
   categories: Category[];
@@ -78,6 +80,10 @@ export interface OndaProposal {
   allocated: number;
 }
 export interface OndaPreview {
+  encoding_version?: 2;
+  entries?: import("./onda-accounts").OndaAccountEntry[];
+  opening_date?: string | null;
+  replaced_allocations?: number;
   report: OndaReport;
   proposals: OndaProposal[];
   blockers: string[];

@@ -69,7 +69,9 @@ export function buildFinanceReport(
         (a, b) => date(a).localeCompare(date(b)) || a.id.localeCompare(b.id),
       );
   const income = sorted(
-    data.income.filter((r) => inRange(r.business_date, start, end)),
+    data.income.filter(
+      (r) => !r.onda_hidden && inRange(r.business_date, start, end),
+    ),
     (r) => r.business_date,
   );
   const expenses = sorted(

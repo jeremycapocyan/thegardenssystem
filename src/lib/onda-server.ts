@@ -1,10 +1,10 @@
 import "server-only";
+import { buildOndaAccountPreview, ondaEntryAccount } from "./onda-accounts";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { canManage } from "./access";
 import { staffService } from "./staff-server";
 import {
-  buildOndaPreview,
   resolvedOndaAmount,
   ONDA_MAX_BYTES,
   type OndaContext,
@@ -134,6 +134,7 @@ export async function prepareOnda(request: Request, actor: string) {
     .from("garden_onda_imports")
     .select("*")
     .eq("sha256", hash)
+    .eq("encoding_version", 2)
     .eq("state", "confirmed")
     .maybeSingle();
   if (existing.error) throw Error("Unable to check import history. Retry.");
@@ -155,7 +156,7 @@ export async function prepareOnda(request: Request, actor: string) {
   }
   const parsed = await parseOndaPdf(bytes),
     context = await ondaContext(actor),
-    plan = buildOndaPreview(parsed, context);
+    plan = buildOndaAccountPreview(parsed, context);
   const upload = await api.storage.from(BUCKET).upload(`${id}.pdf`, bytes, {
     contentType: "application/pdf",
     cacheControl: "0",
@@ -192,7 +193,7 @@ export async function refreshOnda(actor: string, id: string) {
     );
   if (r.state === "confirmed") return ondaPresentation(r);
   const context = await ondaContext(actor),
-    plan = buildOndaPreview(r.parsed, context);
+    plan = buildOndaAccountPreview(r.parsed, context);
   const updated = await staffService().rpc("garden_onda_refresh", {
     p_actor: actor,
     p_id: id,
@@ -228,11 +229,30 @@ export async function confirmOnda(actor: string, id: string, body: unknown) {
       throw Error("Resolve the blocking report warnings first.");
     for (const p of r.plan.proposals) resolvedOndaAmount(p, resolutions[p.key]);
   }
-  const result = await staffService().rpc("garden_onda_confirm", {
-    p_actor: actor,
-    p_id: id,
-    p_resolutions: resolutions,
-  });
+  const transactional = r.plan.encoding_version === 2;
+  const accounts = ((body as Record<string, unknown>).accounts || {}) as Record<
+    string,
+    "cash" | "bank" | "booking"
+  >;
+  if (!accounts || typeof accounts !== "object" || Array.isArray(accounts))
+    throw Error("Choose valid transaction accounts.");
+  if (transactional && r.state !== "confirmed")
+    for (const entry of r.plan.entries || []) ondaEntryAccount(entry, accounts);
+  const result = await staffService().rpc(
+    transactional ? "garden_onda_confirm_transactions" : "garden_onda_confirm",
+    {
+      p_actor: actor,
+      p_id: id,
+      p_resolutions: resolutions,
+      ...(transactional
+        ? {
+            p_accounts: accounts,
+            p_replace_allocations:
+              (body as Record<string, unknown>).replace_allocations === true,
+          }
+        : {}),
+    },
+  );
   if (result.error) throw Error(result.error.message);
   return result.data;
 }

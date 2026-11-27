@@ -1,3 +1,8 @@
+import {
+  buildOndaAccountPreview,
+  applyOndaAccountRows,
+  ondaEntryAccount,
+} from "./onda-accounts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PDFDocument } from "pdf-lib";
@@ -312,4 +317,79 @@ test("non-QRPH payments are not mislabeled in income highlights", () => {
   );
   assert.match(p.proposals[0].generated_notes, /Other methods/);
   assert(!p.proposals[0].generated_notes.includes("QRPH"));
+});
+
+test("transaction previews route Cash to cash, QRPH to booking and cash returns to a negative Cash entry", () => {
+  const ctx = {
+    ...context(),
+    settings: { start_date: "2020-11-02", cash: 0, bank: 0, booking: 0 },
+  };
+  const r = report(
+    [
+      tx("BK-AUTO01", "2020-11-01", 10000, { method: "Cash" }),
+      tx("BK-AUTO02", "2020-11-02", 90000),
+    ],
+    [refund("BK-AUTO02", "2020-11-03", 10000)],
+  );
+  const plan = buildOndaAccountPreview(r, ctx);
+  assert.equal(plan.entries.length, 3);
+  assert.equal(
+    plan.entries.find((e) => e.key === "tx:BK-AUTO01")?.before_opening,
+    true,
+  );
+  assert.equal(
+    plan.entries.find((e) => e.key === "tx:BK-AUTO02")?.account,
+    "booking",
+  );
+  const rows = plan.proposals.map((p, i) => ({
+    id: `legacy-${i}`,
+    business_date: p.date,
+    category_id: p.category_id,
+    amount_cents: p.source_amount,
+    notes: p.notes,
+  }));
+  const saved = applyOndaAccountRows(rows, [], [], plan, {}, {});
+  const finance = { ...structuredClone(EMPTY_DATA), income: rows };
+  assert.equal(
+    finance.income.reduce((n, i) => n + i.amount_cents, 0),
+    90000,
+  );
+  const balances = cashSummary(
+    {
+      settings: ctx.settings,
+      finance,
+      movements: [],
+      allocations: saved.allocations,
+    },
+    "2020-11-05",
+  );
+  assert.equal(balances.balances.booking, 90000);
+  assert.equal(balances.balances.cash, -10000);
+  assert.equal(balances.unassignedRefunds, 0);
+  assert.equal(
+    saved.allocations.some(
+      (a) =>
+        a.income_id ===
+        saved.entries.find((e) => e.key === "tx:BK-AUTO01")?.income_id,
+    ),
+    false,
+  );
+});
+test("unknown payment destinations require an explicit account and missing opening balances block auto posting", () => {
+  const r = report([tx("BK-REVIEW1", "2020-11-02", 50000, { method: "Maya" })]);
+  const plan = buildOndaAccountPreview(r, {
+    ...context(),
+    settings: { start_date: "2020-11-01", cash: 0, bank: 0, booking: 0 },
+  });
+  assert.equal(plan.entries[0].account, null);
+  assert.throws(() => ondaEntryAccount(plan.entries[0]), /Choose an account/);
+  assert.equal(
+    ondaEntryAccount(plan.entries[0], { [plan.entries[0].key]: "bank" }),
+    "bank",
+  );
+  assert(
+    buildOndaAccountPreview(r, context()).blockers.some((b) =>
+      b.includes("opening balances"),
+    ),
+  );
 });

@@ -81,6 +81,8 @@ test("Onda HTTP endpoints verify finance permissions and trust only server-parse
         income: [],
         expenses: [],
         allocations: [],
+        settings: { start_date: "2020-11-01", cash: 0, bank: 0, booking: 0 },
+        entries: [],
         transactions: [],
         refunds: [],
         days: [],
@@ -118,7 +120,7 @@ test("Onda HTTP endpoints verify finance permissions and trust only server-parse
       };
       return send(stored);
     }
-    if (path === "/rest/v1/rpc/garden_onda_confirm") {
+    if (path === "/rest/v1/rpc/garden_onda_confirm_transactions") {
       confirmedArgs = JSON.parse(text);
       return send({
         import_id: confirmedArgs!.p_id,
@@ -210,6 +212,8 @@ test("Onda HTTP endpoints verify finance permissions and trust only server-parse
         assert.equal(r.status, 200, JSON.stringify(b));
         assert.equal(b.state, "preview");
         assert.equal(b.preview.report.net, 90000);
+        assert.equal(b.preview.encoding_version, 2);
+        assert.equal(b.preview.entries[0].account, "booking");
         assert.equal(storageUploads, 1);
         assert.equal(confirmedArgs, null);
         assert.equal(prepareArgs!.p_actor, ids.admin);
@@ -237,10 +241,14 @@ test("Onda HTTP endpoints verify finance permissions and trust only server-parse
         assert.equal(b.source_net_cents, 90000);
         assert.equal(confirmedArgs!.p_actor, ids.admin);
         assert.deepEqual(Object.keys(confirmedArgs!).sort(), [
+          "p_accounts",
           "p_actor",
           "p_id",
+          "p_replace_allocations",
           "p_resolutions",
         ]);
+        assert.deepEqual(confirmedArgs!.p_accounts, {});
+        assert.equal(confirmedArgs!.p_replace_allocations, false);
         assert.equal(r.headers.get("cache-control"), "no-store");
       },
     );

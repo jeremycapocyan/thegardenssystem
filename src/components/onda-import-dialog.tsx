@@ -1,4 +1,11 @@
 "use client";
+import {
+  buildOndaAccountPreview,
+  applyOndaAccountRows,
+  ondaEntryAccount,
+  type OndaAccountPreview,
+} from "@/lib/onda-accounts";
+import { ACCOUNTS, type CashAccount } from "@/lib/balances";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Upload, LoaderCircle, RefreshCw, Download } from "lucide-react";
 import { useWorkspace } from "./workspace-provider";
@@ -7,7 +14,6 @@ import { canManage } from "@/lib/access";
 import { money, displayDate } from "@/lib/finance";
 import { signedMoney } from "@/lib/balances";
 import {
-  buildOndaPreview,
   resolvedOndaAmount,
   ondaCategory,
   type OndaContext,
@@ -72,6 +78,8 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
     [error, setError] = useState(""),
     [preview, setPreview] = useState<Preview | null>(null),
     [choices, setChoices] = useState<Record<string, Choice>>({}),
+    [accounts, setAccounts] = useState<Record<string, CashAccount>>({}),
+    [replaceAllocations, setReplaceAllocations] = useState(false),
     [history, setHistory] = useState<History[]>([]),
     [offset, setOffset] = useState(0),
     [hasMore, setHasMore] = useState(false);
@@ -80,7 +88,7 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
       return JSON.parse(localStorage.getItem(DEMO_STORE) || "null") as {
         context: Pick<
           OndaContext,
-          "transactions" | "refunds" | "days" | "links"
+          "transactions" | "refunds" | "days" | "links" | "entries"
         >;
         history: History[];
       } | null;
@@ -88,12 +96,27 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
       return null;
     }
   };
+  const demoBalances = () => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("gardens.balances.sample.v1") || "null",
+      );
+    } catch {
+      return null;
+    }
+  };
   const demoContext = (): OndaContext => ({
-    fingerprint: JSON.stringify(ws.data),
+    fingerprint: JSON.stringify({ data: ws.data, balances: demoBalances() }),
     income: ws.data.income,
     categories: ws.data.categories,
     expenses: ws.data.expenses,
-    allocations: [],
+    allocations: demoBalances()?.allocations || [],
+    settings: demoBalances()?.settings || {
+      start_date: "2026-11-01",
+      cash: 0,
+      bank: 0,
+      booking: 0,
+    },
     transactions: [],
     refunds: [],
     days: [],
@@ -168,6 +191,8 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
   function show(p: Preview) {
     setPreview(p);
     setChoices({});
+    setAccounts({});
+    setReplaceAllocations(false);
   }
   async function upload(event: React.FormEvent) {
     event.preventDefault();
@@ -191,7 +216,7 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
         state: "preview",
         created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 1800000).toISOString(),
-        preview: buildOndaPreview(parsed, ctx),
+        preview: buildOndaAccountPreview(parsed, ctx),
         result: null,
       });
       demoFingerprint.current = ctx.fingerprint;
@@ -213,7 +238,7 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
     const ctx = demoContext();
     show({
       ...preview!,
-      preview: buildOndaPreview(demoOndaReport(), ctx),
+      preview: buildOndaAccountPreview(demoOndaReport(), ctx),
       state: "preview",
       expires_at: new Date(Date.now() + 1800000).toISOString(),
       result: null,
@@ -275,6 +300,17 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
     if (!preview) return;
     await run("confirm", async () => {
       const resolutions = resolve();
+      if (preview.preview.encoding_version === 2) {
+        for (const e of preview.preview.entries || [])
+          ondaEntryAccount(e, accounts);
+        if (
+          (preview.preview.replaced_allocations || 0) > 0 &&
+          !replaceAllocations
+        )
+          throw Error(
+            "Review replacement of existing daily account assignments.",
+          );
+      }
       for (const p of preview.preview.proposals)
         resolvedOndaAmount(p, resolutions[p.key]);
       if (ws.mode === "demo") {
@@ -327,6 +363,44 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
           if (n < 0) links.push(link);
           else links[n] = link;
         }
+        let accountResult: ReturnType<typeof applyOndaAccountRows> | undefined;
+        if (preview.preview.encoding_version === 2) {
+          accountResult = applyOndaAccountRows(
+            data,
+            ctx.allocations as import("@/lib/balances").CashAllocation[],
+            ctx.entries || [],
+            preview.preview as OndaAccountPreview,
+            accounts,
+            Object.fromEntries(
+              preview.preview.proposals.map((p) => [
+                p.key,
+                resolvedOndaAmount(p, resolutions[p.key]) - p.source_amount,
+              ]),
+            ),
+          );
+          const cash = demoBalances() || {
+            settings: ctx.settings,
+            movements: [],
+          };
+          localStorage.setItem(
+            "gardens.balances.sample.v1",
+            JSON.stringify({ ...cash, allocations: accountResult.allocations }),
+          );
+          inserted = (preview.preview.entries || []).filter(
+            (e) => !e.income_id,
+          ).length;
+          updated = (preview.preview.entries || []).filter((e) => {
+            const old = ctx.entries?.find((l) => l.key === e.key);
+            return (
+              old &&
+              (old.last_amount !== e.amount_cents ||
+                old.last_notes !== e.notes ||
+                old.account !== ondaEntryAccount(e, accounts))
+            );
+          }).length;
+          unchanged =
+            (preview.preview.entries || []).length - inserted - updated;
+        }
         const result = {
           import_id: preview.id,
           inserted,
@@ -377,6 +451,7 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
                 (d) => d.day + "/" + d.kind,
               ),
               links,
+              entries: accountResult?.entries || ctx.entries || [],
             },
             history: [record, ...history],
           }),
@@ -389,7 +464,11 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
       const result = await request(`${preview.id}/confirm/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolutions }),
+        body: JSON.stringify({
+          resolutions,
+          accounts,
+          replace_allocations: replaceAllocations,
+        }),
       });
       setPreview({ ...preview, state: "confirmed", result });
       await ws.refresh();
@@ -446,8 +525,9 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="onda-body">
         <p className="onda-notice">
-          Income only. Onda fees and cash returns already reduce net receipts.
-          No additional expense or account-balance posting is created.
+          Each imported transaction updates Income and its selected account
+          once. Onda fees and cash returns already reduce net receipts; no
+          additional expense is created.
         </p>
         {error && (
           <div className="error-box" role="alert">
@@ -580,6 +660,90 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
               </div>
             ) : (
               <>
+                {preview.preview.encoding_version === 2 && (
+                  <section
+                    className="onda-transactions"
+                    aria-label="Transaction account preview"
+                  >
+                    <h3>Individual transactions and accounts</h3>
+                    <p>
+                      Cash → Cash. QRPH → Booking System. Fees are already
+                      included in net receipts. Cash returns reduce Cash.
+                      Transactions before {preview.preview.opening_date} are
+                      kept in Income but do not post over the opening balances.
+                    </p>
+                    <div className="table-scroll">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Date / reference</th>
+                            <th>Method</th>
+                            <th>Net income</th>
+                            <th>Account</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(preview.preview.entries || []).map((e) => (
+                            <tr key={e.key}>
+                              <td>
+                                {e.date}
+                                <small>{e.reference}</small>
+                                {e.before_opening && (
+                                  <small>
+                                    Before opening · no balance posting
+                                  </small>
+                                )}
+                              </td>
+                              <td>{e.method}</td>
+                              <td>{money(e.amount_cents)}</td>
+                              <td>
+                                <select
+                                  aria-label={`Account ${e.key}`}
+                                  value={accounts[e.key] || e.account || ""}
+                                  disabled={!!busy}
+                                  onChange={(event) =>
+                                    setAccounts((old) => ({
+                                      ...old,
+                                      [e.key]: event.target
+                                        .value as CashAccount,
+                                    }))
+                                  }
+                                >
+                                  <option value="">Choose account</option>
+                                  {Object.entries(ACCOUNTS).map(
+                                    ([value, label]) => (
+                                      <option key={value} value={value}>
+                                        {label}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(preview.preview.replaced_allocations || 0) > 0 && (
+                      <label className="partner-check">
+                        <input
+                          type="checkbox"
+                          checked={replaceAllocations}
+                          onChange={(event) =>
+                            setReplaceAllocations(event.target.checked)
+                          }
+                        />
+                        Replace the {preview.preview.replaced_allocations}{" "}
+                        existing daily account assignment(s) with these
+                        transaction accounts. No additional income is created.
+                      </label>
+                    )}
+                    <p>
+                      Daily rows below reconcile totals only. The saved Income
+                      entries will be individual transactions.
+                    </p>
+                  </section>
+                )}
                 <div className="table-scroll">
                   <table className="data-table onda-table">
                     <thead>
@@ -675,6 +839,36 @@ export function OndaImportDialog({ onClose }: { onClose: () => void }) {
                             <small>Highlights: {p.generated_notes}</small>
                           </td>
                           <td>
+                            {preview.preview.encoding_version === 2 &&
+                              calculated.get(p.key)?.amount != null &&
+                              p.date >= (preview.preview.opening_date || "") &&
+                              (calculated.get(p.key)?.amount || 0) -
+                                p.source_amount !==
+                                0 && (
+                                <label>
+                                  Account for income outside Onda
+                                  <select
+                                    aria-label={`Manual account ${p.key}`}
+                                    value={accounts[`manual:${p.key}`] || ""}
+                                    onChange={(e) =>
+                                      setAccounts((old) => ({
+                                        ...old,
+                                        [`manual:${p.key}`]: e.target
+                                          .value as CashAccount,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">Choose account</option>
+                                    {Object.entries(ACCOUNTS).map(
+                                      ([value, label]) => (
+                                        <option key={value} value={value}>
+                                          {label}
+                                        </option>
+                                      ),
+                                    )}
+                                  </select>
+                                </label>
+                              )}
                             <strong>
                               {calculated.get(p.key)?.amount === null
                                 ? "Choose resolution"

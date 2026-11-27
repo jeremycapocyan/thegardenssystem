@@ -3155,7 +3155,25 @@ td > strong {
 .onda-body {
   padding: 24px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
+}
+.onda-body > *,
+.onda-preview > *,
+.onda-header > div {
+  min-width: 0;
+}
+.onda-transactions small {
+  display: block;
+  margin-top: 5px;
+}
+.onda-transactions select {
+  min-width: 160px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
 }
 .onda-notice {
   padding: 14px 18px;
@@ -3177,6 +3195,7 @@ td > strong {
 }
 .onda-preview {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   border-top: 1px solid var(--line);
   padding-top: 20px;
@@ -3302,6 +3321,11 @@ td > strong {
   .onda-preview .panel-heading {
     flex-wrap: wrap;
     gap: 12px;
+  }
+}
+@media (max-width: 420px) {
+  .onda-totals {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
