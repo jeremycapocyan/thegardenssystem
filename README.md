@@ -84,6 +84,8 @@ Schedule changes preserve previous effective-dated versions and cannot reach a f
 
 Every actual advance release or salary payment creates exactly one protected **Wages** expense. Advance recovery creates no expense. Finance records use actual payment dates, independently of the period when salary was earned. For example, ₱1,000 advanced and ₱5,500 paid later equals ₱6,500 cash expenses in total. These are manual cash-payment records, not bank transfers. The agreed tracker does not calculate statutory contributions, other pay premiums, or leave quotas.
 
+Salary payment and advance release forms require **Paid from → Cash on hand / Bank**. The HR-authorized transaction stores the account and creates one protected account assignment to the linked Wages expense on the actual payment date. HR-only admins can post these payments without receiving broader Finance access. Approvals and payroll advance recoveries create no account movement. Payments before the configured opening date retain their account description without posting balances again. Set opening balances first. Existing payments and assignments stay unchanged; older client submissions without an account remain unassigned for compatibility. Account choices appear in HR payment history and newly generated finalized payroll PDFs. Apply `202611280001_payroll_payment_accounts.sql`; existing immutable PDFs remain unchanged.
+
 Genesis and Ken retain finance reports, including cash wage expenses, but cannot read employee requests, personal attendance, or payroll statements. Deactivated employees retain their own history and cannot submit requests or punches.
 
 ## Timesheet PDFs and employee code attendance

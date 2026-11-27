@@ -1476,6 +1476,8 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                     <small>
                                       {displayDate(c.paid_on)} ·{" "}
                                       {c.reference || "No reference"}
+                                      {c.funding_account &&
+                                        ` · ${c.funding_account === "cash" ? "Cash on hand" : "Bank"}`}
                                     </small>
                                   </span>
                                   <Tag>Paid</Tag>
@@ -1703,6 +1705,8 @@ export function TeamApp({ scan = false }: { scan?: boolean }) {
                                 <small>
                                   {displayDate(c.paid_on)} ·{" "}
                                   {c.reference || "No reference"}
+                                  {c.funding_account &&
+                                    ` · ${c.funding_account === "cash" ? "Cash on hand" : "Bank"}`}
                                 </small>
                               </span>
                               <span>

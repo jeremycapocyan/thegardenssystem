@@ -24,6 +24,7 @@ test("final report freezes approved earnings, partial payments and advance recov
   assert.equal(report.payment_status, "Partially paid");
   assert.equal(report.statement.snapshot.blockers.length, 0);
   data.cash[1].amount_cents = 200000;
+  data.cash[1].funding_account = "bank";
   data.attendance = [];
   data.employees[0].name = "Changed later";
   assert.equal(report.paid_cents, 100000);
@@ -31,6 +32,9 @@ test("final report freezes approved earnings, partial payments and advance recov
   const next = demoPayrollReport(data, data.payroll[0].id, randomUUID());
   assert.equal(next.statement.gross_cents, 385937);
   assert.equal(next.paid_cents, 200000);
+  assert.equal(next.payments[0].funding_account, "bank");
+  data.cash[1].funding_account = "cash";
+  assert.equal(next.payments[0].funding_account, "bank");
   assert.throws(
     () => demoPayrollReport(data, randomUUID(), randomUUID()),
     /Finalize payroll/,

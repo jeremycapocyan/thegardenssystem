@@ -53,6 +53,7 @@ export interface StaffRequest {
   created_at: string;
 }
 export interface StaffCash {
+  funding_account?: "cash" | "bank" | null;
   id: string;
   employee_id: string;
   kind: "advance" | "salary";

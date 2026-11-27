@@ -183,6 +183,7 @@ export function TeamDialog({
           paid_on: get("paid_on"),
           amount_cents: parseMoney(get("amount")),
           reference: get("reference"),
+          account: get("account"),
           ...(a === "release"
             ? { request_id: r!.id }
             : { payroll_id: editor.payroll!.id }),
@@ -505,9 +506,10 @@ export function TeamDialog({
           {(a === "pay" || a === "release") && (
             <>
               <p className="field wide">
-                Record cash actually paid. Remaining:{" "}
+                Record money actually paid. Remaining:{" "}
                 <strong>{money(editor.remaining || 0)}</strong>. One linked
-                Wages expense is created automatically.
+                Wages expense is created and assigned to the selected account
+                automatically.
               </p>
               <Field label="Payment date">
                 <input
@@ -528,6 +530,18 @@ export function TeamDialog({
               </Field>
               <Field label="Receipt / transfer reference">
                 <input name="reference" maxLength={120} />
+              </Field>
+              <Field
+                label="Paid from"
+                hint="Reduces this account once. Payments before the opening date are already covered by opening balances."
+              >
+                <select name="account" required defaultValue="">
+                  <option value="" disabled>
+                    Choose payment account
+                  </option>
+                  <option value="cash">Cash on hand</option>
+                  <option value="bank">Bank</option>
+                </select>
               </Field>
             </>
           )}

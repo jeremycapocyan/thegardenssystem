@@ -601,8 +601,12 @@ export function CashBalances() {
                             ? e.allocations.map((a) => (
                                 <div key={a.id}>
                                   {ACCOUNTS[a.account]}: {money(a.amount_cents)}{" "}
-                                  {a.onda_key ? (
-                                    <small>Managed by Onda</small>
+                                  {a.onda_key || a.staff_cash_id ? (
+                                    <small>
+                                      {a.onda_key
+                                        ? "Managed by Onda"
+                                        : "Managed by Payroll"}
+                                    </small>
                                   ) : (
                                     admin && (
                                       <button

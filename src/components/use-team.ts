@@ -20,6 +20,7 @@ import {
 import { useWorkspace } from "./workspace-provider";
 import { canManage } from "@/lib/access";
 import type { CutoffRule } from "@/lib/payroll-periods";
+import { type CashData } from "@/lib/balances";
 
 export function useTeam() {
   const ws = useWorkspace();
@@ -346,6 +347,28 @@ export function useTeam() {
         remaining -= amount;
       }
     } else if (action === "pay" || action === "release") {
+      const prior = next.cash.find((c) => c.id === id);
+      if (prior) {
+        if (
+          prior.amount_cents !== Number(payload.amount_cents) ||
+          prior.paid_on !== payload.paid_on ||
+          prior.funding_account !== payload.account ||
+          prior.reference !== String(payload.reference || "") ||
+          prior.request_id !== (payload.request_id || null) ||
+          prior.payroll_id !== (payload.payroll_id || null)
+        )
+          throw Error(
+            "Payment reference was already used for different details.",
+          );
+        return { saved: true };
+      }
+      if (payload.account !== "cash" && payload.account !== "bank")
+        throw Error("Choose Cash on hand or Bank as the payment account.");
+      const balances = JSON.parse(
+        localStorage.getItem("gardens.balances.sample.v1") || "null",
+      ) as Omit<CashData, "finance"> | null;
+      if (!balances?.settings)
+        throw Error("Set opening balances in Cash & balances first.");
       const request = next.requests.find((r) => r.id === payload.request_id),
         payroll = next.payroll.find((p) => p.id === payload.payroll_id);
       const payable =
@@ -377,6 +400,7 @@ export function useTeam() {
         paid_on: String(payload.paid_on),
         reference: String(payload.reference || ""),
         created_at: now,
+        funding_account: payload.account,
       };
       next.cash.push(cash);
       const cat =
@@ -401,6 +425,22 @@ export function useTeam() {
         due_month: null,
         staff_payment_id: id,
       });
+      if (cash.paid_on >= balances.settings.start_date) {
+        balances.allocations.push({
+          id,
+          account: cash.funding_account!,
+          expense_id: id,
+          income_id: null,
+          payout_id: null,
+          amount_cents: amount,
+          posted_on: cash.paid_on,
+          staff_cash_id: id,
+        });
+        localStorage.setItem(
+          "gardens.balances.sample.v1",
+          JSON.stringify(balances),
+        );
+      }
     } else throw Error("Unknown employee action.");
     commit(next);
     return { saved: true };

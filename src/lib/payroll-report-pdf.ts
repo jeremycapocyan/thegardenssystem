@@ -152,7 +152,7 @@ export async function createPayrollReportPdf(
     y -= 22;
     text("Payment date", margin, y, 9, true);
     text("Amount", 200, y, 9, true);
-    text("Reference", 300, y, 9, true);
+    text("Reference / paid from", 300, y, 9, true);
     y -= 18;
   }
   paymentHeader();
@@ -161,7 +161,11 @@ export async function createPayrollReportPdf(
     y -= 17;
   }
   for (const p of r.payments) {
-    const reference = lines(p.reference || "-", w - 300 - margin, 8.5);
+    const reference = lines(
+      `${p.reference || "-"}${p.funding_account ? ` · ${p.funding_account === "cash" ? "Cash on hand" : "Bank"}` : ""}`,
+      w - 300 - margin,
+      8.5,
+    );
     const needed = Math.max(18, reference.length * 12 + 6);
     if (y - needed < 100) {
       page = doc.addPage(PageSizes.A4);

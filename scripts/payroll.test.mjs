@@ -842,5 +842,191 @@ test("Employee payroll database and permissions", async (t) => {
       assert.equal(timesheet.employees[0].days[15].finalized, false);
     },
   );
+  await t.test(
+    "HR payments atomically assign Cash/Bank, protect allocations and retry without duplicate expenses",
+    async () => {
+      const hr = randomUUID(),
+        finance = randomUUID(),
+        uid = randomUUID(),
+        eid = randomUUID(),
+        rid = randomUUID();
+      for (const user of [hr, finance, uid])
+        await db.query("insert into auth.users values($1)", [user]);
+      await db.query(
+        "insert into garden_profiles(id,display_name,role,finance_access,team_access,manage_accounts) values($1,'HR only','admin',false,true,false),($2,'Finance only','admin',true,false,false)",
+        [hr, finance],
+      );
+      await command(hr, "employee", employee(eid, "AccountFixture"));
+      await db.query("select garden_bind_employee($1,$2)", [eid, uid]);
+      await command(uid, "request", {
+        id: rid,
+        kind: "advance",
+        amount_cents: 50000,
+        reason: "Fictional advance",
+      });
+      await command(hr, "decide", { request_id: rid, status: "approved" });
+      const count = async () =>
+        (
+          await db.query(
+            "select (select count(*)::int from garden_staff_cash) payments,(select count(*)::int from garden_expenses) expenses,(select count(*)::int from garden_cash_allocations) allocations",
+          )
+        ).rows[0];
+      const before = await count();
+      const release = {
+        id: randomUUID(),
+        request_id: rid,
+        amount_cents: 5000,
+        paid_on: "2020-01-09",
+        reference: "Before opening",
+        account: "cash",
+      };
+      await assert.rejects(
+        command(hr, "release", release),
+        /configure opening balances/,
+      );
+      assert.deepEqual(await count(), before);
+      await as(admin, () =>
+        db.query("select garden_cash_setup('2020-01-10',1000000,1000000,0)"),
+      );
+      await command(hr, "release", release);
+      await command(hr, "release", release);
+      assert.equal(
+        (
+          await db.query(
+            "select count(*)::int n from garden_cash_allocations where staff_cash_id=$1",
+            [release.id],
+          )
+        ).rows[0].n,
+        0,
+      );
+      const first = {
+        ...release,
+        id: randomUUID(),
+        amount_cents: 10000,
+        paid_on: "2020-01-15",
+        reference: "Cash advance",
+        account: "cash",
+      };
+      await assert.rejects(
+        command(hr, "release", { ...first, account: "booking" }),
+        /Cash on hand or Bank/,
+      );
+      await assert.rejects(
+        command(hr, "release", { ...first, account: null }),
+        /Cash on hand or Bank/,
+      );
+      for (const actor of [uid, viewer, finance])
+        await assert.rejects(
+          command(actor, "release", first),
+          (e) => e.code === "42501",
+        );
+      await command(hr, "release", first);
+      await command(hr, "release", first);
+      await assert.rejects(
+        command(hr, "release", { ...first, account: "bank" }),
+        /different funding account/,
+      );
+      const second = {
+        ...first,
+        id: randomUUID(),
+        account: "bank",
+        reference: "Bank advance",
+      };
+      await command(hr, "release", second);
+      await command(hr, "correct", {
+        employee_id: eid,
+        date: "2020-01-16",
+        clock_in: "2020-01-16T07:30:00Z",
+        clock_out: "2020-01-16T15:30:00Z",
+        reason: "Complete sample shift",
+      });
+      const statement = await command(hr, "finalize", {
+        employee_id: eid,
+        period_start: "2020-01-16",
+      });
+      assert.equal(statement.gross_cents, 65000);
+      assert.equal(statement.recovery_cents, 25000);
+      assert.equal(statement.payable_cents, 40000);
+      const pay1 = {
+        id: randomUUID(),
+        payroll_id: statement.id,
+        amount_cents: 10000,
+        paid_on: "2020-01-31",
+        reference: "Bank salary",
+        account: "bank",
+      };
+      const pay2 = {
+        ...pay1,
+        id: randomUUID(),
+        amount_cents: 30000,
+        reference: "Cash salary",
+        account: "cash",
+      };
+      await command(hr, "pay", pay1);
+      await command(hr, "pay", pay1);
+      await command(hr, "pay", pay2);
+      await assert.rejects(
+        command(hr, "pay", { ...pay1, id: randomUUID(), amount_cents: 1 }),
+        /cannot exceed/,
+      );
+      const totals = (
+        await db.query(
+          "select sum(c.amount_cents)::int paid,sum(a.amount_cents)::int assigned,count(c.id)::int payments,count(a.id)::int allocations from garden_staff_cash c join garden_expenses e on e.staff_payment_id=c.id left join garden_cash_allocations a on a.staff_cash_id=c.id where c.employee_id=$1",
+          [eid],
+        )
+      ).rows[0];
+      assert.deepEqual(totals, {
+        paid: 65000,
+        assigned: 60000,
+        payments: 5,
+        allocations: 4,
+      });
+      const snapshot = (
+        await as(admin, () => db.query("select garden_balances_snapshot() v"))
+      ).rows[0].v;
+      const accountTotals = { cash: 0, bank: 0 };
+      for (const a of snapshot.allocations.filter((a) => a.staff_cash_id))
+        accountTotals[a.account] += a.amount_cents;
+      assert.deepEqual(accountTotals, { cash: 40000, bank: 20000 });
+      await assert.rejects(
+        as(admin, () =>
+          db.query("select garden_cash_unassign($1)", [first.id]),
+        ),
+        (e) => e.code === "42501",
+      );
+      await assert.rejects(
+        as(admin, () =>
+          db.query(
+            "select garden_cash_allocate($1,'expenses',(select id from garden_expenses where staff_payment_id=$1),'bank',10000)",
+            [first.id],
+          ),
+        ),
+        (e) => e.code === "42501",
+      );
+      await as(hr, async () => {
+        assert.equal(
+          (await db.query("select * from garden_cash_allocations")).rows.length,
+          0,
+        );
+        assert.equal(
+          (
+            await db.query("select garden_team_snapshot() v")
+          ).rows[0].v.cash.find((c) => c.id === pay1.id).funding_account,
+          "bank",
+        );
+      });
+      const report = (
+        await db.query("select garden_prepare_payroll_report($1,$2,$3) v", [
+          hr,
+          statement.id,
+          randomUUID(),
+        ])
+      ).rows[0].v.report.data;
+      assert.deepEqual(report.payments.map((p) => p.funding_account).sort(), [
+        "bank",
+        "cash",
+      ]);
+    },
+  );
   await db.close();
 });

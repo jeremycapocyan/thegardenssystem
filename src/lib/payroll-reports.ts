@@ -3,7 +3,12 @@ export interface PayrollReportData {
   id: string;
   employee: { id: string; name: string; employee_code: string; email: string };
   statement: Payroll;
-  payments: { paid_on: string; amount_cents: number; reference: string }[];
+  payments: {
+    paid_on: string;
+    amount_cents: number;
+    reference: string;
+    funding_account?: "cash" | "bank" | null;
+  }[];
   paid_cents: number;
   balance_cents: number;
   payment_status: "Paid" | "Partially paid" | "Unpaid";
@@ -47,6 +52,7 @@ export function demoPayrollReport(
       paid_on: c.paid_on,
       amount_cents: c.amount_cents,
       reference: c.reference,
+      ...(c.funding_account ? { funding_account: c.funding_account } : {}),
     }));
   const paid = payments.reduce((s, c) => s + c.amount_cents, 0);
   return structuredClone({

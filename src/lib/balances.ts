@@ -14,6 +14,7 @@ export interface CashSettings {
   booking: number;
 }
 export interface CashAllocation {
+  staff_cash_id?: string | null;
   onda_key?: string | null;
   posted_on?: string;
   id: string;
