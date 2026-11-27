@@ -676,5 +676,341 @@ test("Partner cash advances reconcile financing, purchases and principal repayme
       );
     },
   );
+  await t.test(
+    "distribution preview is reversible, stale-safe and reconciles monthly FIFO reimbursements",
+    async () => {
+      const baseline = await as(
+        admin,
+        async () =>
+          (
+            await one(
+              "select garden_distribution_basis('2020-03-01','2020-03-31') v",
+            )
+          ).v,
+      );
+      const a = await receive({
+        received_on: "2020-03-01",
+        first_due: "2020-04-30",
+        amount_cents: 5000000,
+        monthly_cents: 5000000,
+      });
+      const p1 = await buy(a.id, {
+        paid_on: "2020-03-02",
+        amount_cents: 2000000,
+        total_cents: 3000000,
+      });
+      const p2 = await buy(a.id, {
+        paid_on: "2020-03-03",
+        amount_cents: 1000000,
+        total_cents: 1000000,
+      });
+      const basis = (start: string, end: string) =>
+        as(
+          admin,
+          async () =>
+            (
+              await one("select garden_distribution_basis($1,$2) v", [
+                start,
+                end,
+              ])
+            ).v,
+        );
+      const march = await basis("2020-03-01", "2020-03-31");
+      assert.equal(
+        march.operating_result_cents - baseline.operating_result_cents,
+        -4000000,
+      );
+      assert.equal(
+        march.funded_purchases_cents - baseline.funded_purchases_cents,
+        3000000,
+      );
+      assert.equal(
+        march.payout_basis_cents - baseline.payout_basis_cents,
+        -1000000,
+      );
+      const id = randomUUID(),
+        payload = {
+          advance_id: a.id,
+          paid_on: "2020-04-01",
+          amount_cents: 4000000,
+          account: "cash",
+        };
+      const counts = () =>
+        one(
+          "select (select count(*)::int from garden_expenses) expenses,(select count(*)::int from garden_cash_movements) movements,(select count(*)::int from garden_partner_cash_actions) actions,(select count(*)::int from garden_audit) audit",
+        );
+      const before = await counts();
+      const preview = () =>
+        as(
+          admin,
+          async () =>
+            (
+              await one("select garden_partner_cash_preview('repay',$1,$2) v", [
+                id,
+                JSON.stringify(payload),
+              ])
+            ).v,
+        );
+      const reviewed = await preview();
+      assert.deepEqual(await counts(), before);
+      assert.equal(reviewed.repayment.reimbursed_cost_cents, 3000000);
+      assert.equal(reviewed.repayment.unused_return_cents, 1000000);
+      assert.deepEqual(reviewed.repayment.allocations, [
+        { spend_id: p1.id, amount_cents: 2000000 },
+        { spend_id: p2.id, amount_cents: 1000000 },
+      ]);
+      // Another finance action invalidates a reviewed save; the failed save changes nothing.
+      await receive({
+        received_on: "2020-03-04",
+        first_due: "2020-04-30",
+        amount_cents: 100,
+        monthly_cents: 100,
+      });
+      const changed = await counts();
+      await assert.rejects(
+        cmd(
+          "repay",
+          { ...payload, distribution_expected: reviewed.fingerprint },
+          id,
+        ),
+        /changed after review/,
+      );
+      assert.deepEqual(await counts(), changed);
+      const refreshed = await preview();
+      await cmd(
+        "repay",
+        { ...payload, distribution_expected: refreshed.fingerprint },
+        id,
+      );
+      await cmd(
+        "repay",
+        { ...payload, distribution_expected: reviewed.fingerprint },
+        id,
+      ); // lost-response retry
+      const after = await counts();
+      assert.equal(after.expenses, before.expenses);
+      assert.equal(after.movements, changed.movements + 1);
+      const april = await basis("2020-04-01", "2020-04-30");
+      assert.equal(
+        april.events.find((e: any) => e.id === id).reimbursed_cost_cents,
+        3000000,
+      );
+      assert.equal(
+        april.events.find((e: any) => e.id === id).unused_return_cents,
+        1000000,
+      );
+      const snap = await one(
+        "select to_jsonb(t) v from garden_partner_cash_repayments t where id=$1",
+        [id],
+      );
+      await assert.rejects(
+        buy(a.id, {
+          paid_on: "2020-04-02",
+          amount_cents: 1500000,
+          total_cents: 1500000,
+        }),
+        /cash retained/,
+      );
+      // Edits use the same complete-history validation and preview; preserve linked cash ID.
+      const editPayload = {
+        record_id: id,
+        expected: snap.v,
+        amount_cents: 3500000,
+        account: "cash",
+        reference: "",
+        reason: "Fictional correction",
+        paid_on: "2020-04-01",
+      };
+      const editId = randomUUID();
+      const editPreview = await as(
+        admin,
+        async () =>
+          (
+            await one(
+              "select garden_partner_cash_preview('edit_repayment',$1,$2) v",
+              [editId, JSON.stringify(editPayload)],
+            )
+          ).v,
+      );
+      assert.equal(editPreview.repayment.reimbursed_cost_cents, 3000000);
+      assert.equal(editPreview.repayment.unused_return_cents, 500000);
+      await cmd(
+        "edit_repayment",
+        { ...editPayload, distribution_expected: editPreview.fingerprint },
+        editId,
+      );
+      assert.equal(
+        (
+          await one(
+            "select movement_id from garden_partner_cash_repayments where id=$1",
+            [id],
+          )
+        ).movement_id,
+        snap.v.movement_id,
+      );
+      for (const actor of [viewer, employee, hr, disabled]) {
+        await assert.rejects(
+          as(actor, () =>
+            one("select garden_partner_cash_preview('repay',$1,$2)", [
+              randomUUID(),
+              JSON.stringify(payload),
+            ]),
+          ),
+          (e: any) => e.code === "42501",
+        );
+      }
+      await assert.rejects(
+        as(employee, () =>
+          one("select garden_distribution_basis('2020-03-01','2020-03-31')"),
+        ),
+        (e: any) => e.code === "42501",
+      );
+      await as(viewer, () =>
+        one("select garden_distribution_basis('2020-03-01','2020-03-31')"),
+      );
+      for (const fn of [
+        "garden_partner_cash_command_core",
+        "garden_partner_cash_edit_core",
+      ])
+        await assert.rejects(
+          as(admin, () =>
+            one(`select ${fn}('repay',$1,$2)`, [
+              randomUUID(),
+              JSON.stringify(payload),
+            ]),
+          ),
+          (e: any) => e.code === "42501",
+        );
+    },
+  );
+  await t.test(
+    "monthly owner entitlements use payout basis and later repayment flags the frozen month",
+    async () => {
+      const a = await receive({
+        received_on: "2020-09-01",
+        first_due: "2020-10-31",
+        amount_cents: 1000000,
+        monthly_cents: 1000000,
+      });
+      await buy(a.id, {
+        paid_on: "2020-09-02",
+        amount_cents: 1000000,
+        total_cents: 1000000,
+      });
+      await db.query(
+        "insert into garden_income(business_date,category_id,amount_cents,notes) select '2020-09-02',id,2000000,'Fictional payout basis test' from garden_categories where kind='income' limit 1",
+      );
+      const preview = await as(
+        admin,
+        async () =>
+          (await one("select garden_partner_preview('2020-09-01') v")).v,
+      );
+      assert.equal(preview.distribution.operating_result_cents, 1000000);
+      assert.equal(preview.net_cents, 2000000);
+      assert.deepEqual(
+        preview.owners.map((o: any) => o.entitlement),
+        [800000, 800000, 400000],
+      );
+      const sid = randomUUID();
+      await as(admin, () =>
+        one("select garden_partner_command('settle',$1,$2) v", [
+          sid,
+          JSON.stringify({
+            month: "2020-09-01",
+            fingerprint: preview.fingerprint,
+          }),
+        ]),
+      );
+      const frozen = await one(
+        "select snapshot from garden_owner_settlements where id=$1",
+        [sid],
+      );
+      await repay(a.id, { paid_on: "2020-09-15", amount_cents: 500000 });
+      const updated = await as(
+        admin,
+        async () =>
+          (await one("select garden_partner_preview('2020-09-01') v")).v,
+      );
+      assert.equal(updated.net_cents, 1500000);
+      assert.equal(updated.needs_review, true);
+      assert.deepEqual(
+        (
+          await one(
+            "select snapshot from garden_owner_settlements where id=$1",
+            [sid],
+          )
+        ).snapshot,
+        frozen.snapshot,
+      );
+      assert.equal(
+        (
+          await one(
+            "select net_cents::text n from garden_owner_settlements where id=$1",
+            [sid],
+          )
+        ).n,
+        "2000000",
+      );
+    },
+  );
+  await t.test(
+    "later same-day repayments do not reassign a saved repayment's reimbursed costs",
+    async () => {
+      const a = await receive({
+        received_on: "2020-10-01",
+        first_due: "2020-10-31",
+        amount_cents: 100000,
+        monthly_cents: 100000,
+      });
+      await buy(a.id, {
+        paid_on: "2020-10-02",
+        amount_cents: 40000,
+        total_cents: 40000,
+      });
+      const first = "ffffffff-ffff-4fff-8fff-fffffffffff1",
+        second = "00000000-0000-4000-8000-000000000001";
+      await cmd(
+        "repay",
+        {
+          advance_id: a.id,
+          paid_on: "2020-10-10",
+          amount_cents: 40000,
+          account: "cash",
+        },
+        first,
+      );
+      await cmd(
+        "repay",
+        {
+          advance_id: a.id,
+          paid_on: "2020-10-10",
+          amount_cents: 10000,
+          account: "cash",
+        },
+        second,
+      );
+      const basis = await as(
+        admin,
+        async () =>
+          (
+            await one(
+              "select garden_distribution_basis('2020-10-01','2020-10-31') v",
+            )
+          ).v,
+      );
+      assert.equal(
+        basis.events.find((e: any) => e.id === first).reimbursed_cost_cents,
+        40000,
+      );
+      assert.equal(
+        basis.events.find((e: any) => e.id === second).reimbursed_cost_cents,
+        0,
+      );
+      assert.equal(
+        basis.events.find((e: any) => e.id === second).unused_return_cents,
+        10000,
+      );
+    },
+  );
   await db.close();
 });

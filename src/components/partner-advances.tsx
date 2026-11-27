@@ -849,7 +849,8 @@ export function PartnerAdvances({
             <div className="partner-review">
               <p>
                 <strong>
-                  Recorded full-month net income: {money(preview.net_cents)}
+                  Full-month income available for payouts:{" "}
+                  {money(preview.net_cents)}
                 </strong>
               </p>
               {preview.needs_review && (
@@ -1517,7 +1518,7 @@ function PartnerForm({
             {form.kind === "settle" && form.preview && (
               <div className="wide">
                 <p>
-                  {displayMonth(form.preview.month)} · net income{" "}
+                  {displayMonth(form.preview.month)} · payout basis{" "}
                   {money(form.preview.net_cents)}
                 </p>
                 <SettlementTable preview={form.preview} />

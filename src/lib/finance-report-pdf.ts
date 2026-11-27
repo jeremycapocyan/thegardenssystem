@@ -292,7 +292,7 @@ export async function createFinanceReportPdf(
   const cards = [
     ["Income", r.cash.income],
     ["Business expenses", r.cash.expense],
-    ["Net income", r.cash.net],
+    ["Payout basis", r.distribution.payout_basis_cents],
     ["Owner cash payouts", r.paidToOwners],
   ] as const;
   const gap = 12,
@@ -315,7 +315,7 @@ export async function createFinanceReportPdf(
   y -= 88;
   const half = (content - 38) / 2,
     top = y;
-  text("Business cash calculation", margin, y, 11, true);
+  text("Recorded operating calculation", margin, y, 11, true);
   y -= 25;
   for (const [label, value, strong] of [
     ["Total income", r.cash.income, false],
@@ -323,8 +323,8 @@ export async function createFinanceReportPdf(
     ["Fixed-bill payments", r.cash.fixed, false],
     ["Installment payments", r.cash.installment, false],
     ["Total business expenses", r.cash.expense, true],
-    ["NET INCOME", r.cash.net, true],
-    ["Distributable income", r.cash.distributable, false],
+    ["Operating result", r.cash.net, true],
+    ["Distributable for owners", r.distribution.distributable_cents, false],
     ["Loss shown separately", Math.max(0, -r.cash.net), false],
   ] as const) {
     amountPair(label, value, margin, y, half, strong);
@@ -352,10 +352,17 @@ export async function createFinanceReportPdf(
     true,
   );
   y -= 31;
-  amountPair("Cash after owner payouts", r.retained, right, y, half, true);
+  amountPair(
+    "Operating result after owner payouts",
+    r.retained,
+    right,
+    y,
+    half,
+    true,
+  );
   y -= 22;
   for (const s of wrap(
-    "Cash after owner payouts is period net income less actual owner payouts. It is not an opening or bank balance.",
+    "Operating result after owner payouts is recorded period operating result less actual owner payouts. It is not an opening or bank balance.",
     half,
     8,
   )) {
@@ -364,12 +371,66 @@ export async function createFinanceReportPdf(
   }
   y = Math.min(leftBottom, y) - 12;
   paragraph(
-    "Payments are deducted once using their actual payment dates. Owner payouts do not reduce business net income. Fixed-bill and installment balances below are tracked separately from period cash spending.",
+    "Payments are deducted once using their actual payment dates. Owner payouts do not reduce recorded operating result. Fixed-bill and installment balances below are tracked separately from period cash spending.",
     8,
   );
   paragraph(
     "Period owner allocations are indicative. Settlement entitlements use the entire calendar month, with no loss carryforward. Genesis and Ken are rounded to centavos; Jeremy receives the remainder.",
     8,
+  );
+
+  newPage("Owner payout basis reconciliation");
+  table(
+    "Income available for payouts",
+    [col("Calculation", 70), col("PHP", 30, true)],
+    [
+      row(
+        "Recorded operating result: income less recorded expenses",
+        money(r.distribution.operating_result_cents),
+      ),
+      row(
+        "Add linked partner-funded purchases",
+        money(r.distribution.funded_purchases_cents),
+      ),
+      row(
+        "Less cost reimbursed to partners",
+        money(r.distribution.reimbursed_cost_cents),
+      ),
+      row(
+        "Income available for payouts",
+        money(r.distribution.payout_basis_cents),
+      ),
+      row(
+        "Distributable for owners (minimum zero)",
+        money(r.distribution.distributable_cents),
+      ),
+      row(
+        "Unused advance returned (no payout deduction)",
+        money(r.distribution.unused_return_cents),
+      ),
+    ],
+    "Owner shares use the repayment-adjusted payout basis. Actual expenses and account movements stay recorded once. ROI continues to use the operating-result basis. Capital-recovery withholding follows gross owner entitlements.",
+  );
+  table(
+    "Partner-funded cost adjustments in this period",
+    [
+      col("Date", 13),
+      col("Partner / purpose", 34),
+      col("Purchase addback", 18, true),
+      col("Cost reimbursed", 18, true),
+      col("Unused return", 17, true),
+    ],
+    r.distribution.events.map((e) => {
+      const a = r.partnerCash.advances.find((a) => a.id === e.advance_id);
+      return row(
+        e.date,
+        `${a?.owner || "Partner"} - ${a?.purpose || e.advance_id}`,
+        money(e.funded_cents),
+        money(e.reimbursed_cost_cents),
+        money(e.unused_return_cents),
+      );
+    }),
+    "Reimbursements cover linked purchases oldest first within the same advance. Excess repayments return unused cash and have no payout deduction. This adjustment table does not post additional transactions.",
   );
 
   newPage("Cash flow and spending");
@@ -431,7 +492,7 @@ export async function createFinanceReportPdf(
     y -= 23;
   }
   y -= 10;
-  text("Net income trend", margin, y, 11, true);
+  text("Income available for payouts trend", margin, y, 11, true);
   y -= 15;
   const grouped = new Map<string, number>();
   for (const [i, d] of r.daily.entries()) {
@@ -441,7 +502,7 @@ export async function createFinanceReportPdf(
         : r.daily.length > 31
           ? r.daily[i - (i % 7)].date
           : d.date;
-    grouped.set(key, (grouped.get(key) || 0) + d.net);
+    grouped.set(key, (grouped.get(key) || 0) + d.payoutBasis);
   }
   const series = [...grouped],
     chartH = Math.min(97, y - bottom - 24),
@@ -477,7 +538,7 @@ export async function createFinanceReportPdf(
       );
   });
   text(
-    "Gold: positive net. Burgundy: loss. Zero line shown. Daily, seven-day, or monthly groups according to range length.",
+    "Gold: positive payout basis. Burgundy: negative payout basis. Zero line shown. Daily, seven-day, or monthly groups according to range length.",
     margin,
     bottom + 2,
     7,
@@ -538,7 +599,7 @@ export async function createFinanceReportPdf(
       col("Fixed", 10, true),
       col("Installments", 11, true),
       col("Total expenses", 12, true),
-      col("Net", 12, true),
+      col("Operating result", 12, true),
       col("Owner payouts", 12, true),
       col("After owners", 12, true),
     ],
@@ -571,7 +632,7 @@ export async function createFinanceReportPdf(
         total: true,
       },
     ],
-    "Business net = income less all business expenses. After owners = business net less owner cash payouts. These are period movements, not cash-account balances.",
+    "Operating result = income less recorded expenses. After owners = operating result less owner cash payouts. The repayment-adjusted payout basis is reconciled separately. These are period movements, not cash-account balances.",
   );
   table(
     "Income transaction details",
@@ -721,7 +782,7 @@ export async function createFinanceReportPdf(
     [
       col("Calendar month", 14),
       col("Owner", 10),
-      col("Full-month net", 13, true),
+      col("Full-month payout basis", 13, true),
       col("Share", 6, true),
       col("Gross entitlement", 13, true),
       col("Capital withheld", 13, true),
@@ -748,7 +809,7 @@ export async function createFinanceReportPdf(
         ),
       ),
     ),
-    `Each report month uses its ENTIRE calendar month's net income. Confirmed owner settlements use frozen shares and capital deductions; source changes require admin review. Still payable = gross entitlement less confirmed capital withholding less actual cash payouts through ${r.options.asOf}. Withholding retains funds in Gardens; it is not another expense or cash payment. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
+    `Each report month uses its ENTIRE calendar month's repayment-adjusted payout basis. Confirmed owner settlements use frozen shares and capital deductions; source changes require admin review. Still payable = gross entitlement less confirmed capital withholding less actual cash payouts through ${r.options.asOf}. Withholding retains funds in Gardens; it is not another expense or cash payment. Negative balances flag overpayments. Loss months distribute zero; no loss carryforward.`,
   );
   table(
     "Partner advances — Gardens owes partners",
@@ -778,7 +839,7 @@ export async function createFinanceReportPdf(
           : (a.next || "Repaid") + "\n" + money(a.overdue) + " overdue",
       ),
     ),
-    `As of ${r.options.asOf}. Receipts and principal repayments affect account funds only. Purchases appear once in Expenses. Cash advances do not change capital or owner profit shares. Linked purchases document funding, not a separate cash balance.`,
+    `As of ${r.options.asOf}. Receipts increase account funds without income. Purchases appear once in Expenses. Linked funded costs reduce the owner payout basis when Gardens reimburses the partner. Unused-fund returns do not reduce the payout basis. Capital is unchanged.`,
   );
   table(
     "Partner cash advance repayment terms",
@@ -969,7 +1030,7 @@ export async function createFinanceReportPdf(
     [
       col("Month", 12),
       col("Confirmed at (Manila)", 24),
-      col("Net used", 16, true),
+      col("Payout basis used", 16, true),
       col("Status", 12),
       col("Correction reason", 36),
     ],
@@ -1012,7 +1073,7 @@ export async function createFinanceReportPdf(
         total: true,
       },
     ],
-    "This log uses actual payout dates in the selected reporting range. Owner payouts do not reduce business net income.",
+    "This log uses actual payout dates in the selected reporting range. Owner payouts do not reduce recorded operating result.",
   );
   newPage("Capital and ROI as of report date");
   paragraph(
@@ -1121,7 +1182,7 @@ export async function createFinanceReportPdf(
         total: true,
       },
     ],
-    "These recorded expenses remain deducted from business net income. They are added back only in the cumulative ROI recovery calculation.",
+    "These recorded expenses remain deducted from recorded operating result. They are added back only in the cumulative ROI recovery calculation.",
   );
   if (r.warnings.length) {
     table(
@@ -1197,7 +1258,7 @@ export async function createFinanceReportPdf(
               `${m.reference || "-"}\n${m.reason}`,
             ),
           ),
-        "Transfers preserve combined tracked funds. Funding and corrections change balances only; recorded business income, expenses, ROI and owner shares remain unchanged.",
+        "Transfers preserve combined tracked funds. Ordinary funding and corrections affect balances only. Partner advance repayments also reduce the owner payout basis for the linked costs they reimburse; they do not create additional expenses.",
       );
     } else
       table(

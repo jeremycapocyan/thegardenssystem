@@ -1,3 +1,4 @@
+import { partnerCostLedger } from "./distribution";
 import type { Dataset, Owner } from "./types";
 import type { CashData, CashMovement, CashAllocation } from "./balances";
 import { emptyPartnerCash, type PartnerCashAction } from "./partner-cash";
@@ -281,6 +282,7 @@ export function applyPartnerCashDemo(
         owned_movement: owned,
         detail: m,
         voided_at: null,
+        created_at: new Date().toISOString(),
       });
     } else {
       if (!["cash", "bank"].includes(account))
@@ -447,6 +449,7 @@ export function applyPartnerCashDemo(
       s.void_reason = text("reason");
     }
   }
+  partnerCostLedger(p);
   (p.demo_actions ??= []).push({ id, action, payload: signature });
   cash.finance = next;
   return { data: next, balances: cash };

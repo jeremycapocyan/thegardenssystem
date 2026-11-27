@@ -1,3 +1,9 @@
+import {
+  distributionBasis,
+  distributionEvidenceKey,
+  partnerCostLedger,
+} from "./distribution";
+import { ownerShares, totals, settlements } from "./finance";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EMPTY_DATA, type Dataset } from "./types";
@@ -375,4 +381,225 @@ test("demo retries and prior-date reports do not duplicate funds or count future
     spends: [],
     repayments: [],
   });
+});
+
+test("payout basis defers only funded costs, then deducts actual cost reimbursement once", () => {
+  const f = fixture();
+  f.cmd("purchase", {
+    advance_id: f.a,
+    paid_on: "2020-01-02",
+    amount_cents: 2500000,
+    total_cents: 4000000,
+    category_id: "expense",
+    account: "cash",
+    notes: "Mixed funded fictional purchase",
+  });
+  f.data.income.push({
+    id: "income",
+    business_date: "2020-01-02",
+    category_id: "income",
+    amount_cents: 10000000,
+    notes: "",
+  });
+  let basis = distributionBasis(f.data, "2020-01-01", "2020-01-31");
+  assert.equal(totals(f.data, "2020-01-01", "2020-01-31").net, 6000000);
+  assert.equal(basis.funded_purchases_cents, 2500000);
+  assert.equal(basis.payout_basis_cents, 8500000);
+  assert.deepEqual(ownerShares(basis.payout_basis_cents), {
+    Genesis: 3400000,
+    Ken: 3400000,
+    Jeremy: 1700000,
+  });
+  const beforeExpenses = structuredClone(f.data.expenses),
+    movements = f.cash.movements.length;
+  const id = f.cmd("repay", {
+    advance_id: f.a,
+    paid_on: "2020-02-01",
+    amount_cents: 1000000,
+    account: "cash",
+  });
+  assert.deepEqual(f.data.expenses, beforeExpenses);
+  assert.equal(f.cash.movements.length, movements + 1);
+  basis = distributionBasis(f.data, "2020-02-01", "2020-02-29");
+  assert.equal(basis.operating_result_cents, 0);
+  assert.equal(basis.reimbursed_cost_cents, 1000000);
+  assert.equal(basis.unused_return_cents, 0);
+  assert.equal(basis.payout_basis_cents, -1000000);
+  assert.equal(basis.distributable_cents, 0);
+  assert.equal(basis.events.find((e) => e.id === id)?.allocations.length, 1);
+  assert.equal(
+    distributionBasis(f.data, "2020-01-01", "2020-01-31").payout_basis_cents,
+    8500000,
+  );
+  assert.equal(
+    distributionBasis(f.data, "2020-01-01", "2020-02-29").payout_basis_cents,
+    7500000,
+  );
+  assert.equal(
+    settlements(f.data, "2020-01-01", "2020-03-01")[0].entitlement,
+    3400000,
+  );
+});
+
+test("unused returns cannot finance later purchases and FIFO reimbursements are deterministic", () => {
+  const f = fixture();
+  f.cmd("repay", {
+    advance_id: f.a,
+    paid_on: "2020-01-02",
+    amount_cents: 1000000,
+    account: "cash",
+  });
+  assert.equal(
+    distributionBasis(f.data, "2020-01-01", "2020-01-31").payout_basis_cents,
+    0,
+  );
+  assert.throws(
+    () =>
+      f.cmd("purchase", {
+        advance_id: f.a,
+        paid_on: "2020-01-03",
+        amount_cents: 2000000,
+        total_cents: 2000000,
+        category_id: "expense",
+        account: "cash",
+      }),
+    /cash retained/,
+  );
+  const first = f.cmd("purchase", {
+    advance_id: f.a,
+    paid_on: "2020-01-03",
+    amount_cents: 1000000,
+    total_cents: 1000000,
+    category_id: "expense",
+    account: "cash",
+  });
+  const second = f.cmd("purchase", {
+    advance_id: f.a,
+    paid_on: "2020-01-04",
+    amount_cents: 500000,
+    total_cents: 500000,
+    category_id: "expense",
+    account: "cash",
+  });
+  const repayment = f.cmd("repay", {
+    advance_id: f.a,
+    paid_on: "2020-01-05",
+    amount_cents: 1200000,
+    account: "cash",
+  });
+  const ledger = partnerCostLedger(f.data.partner_cash!);
+  assert.deepEqual(ledger.find((e) => e.id === repayment)?.allocations, [
+    { spend_id: first, amount_cents: 1000000 },
+    { spend_id: second, amount_cents: 200000 },
+  ]);
+  const invalid = structuredClone(f.data.partner_cash!);
+  invalid.spends[0].detail.expense.paid_on = "2020-01-06";
+  assert.throws(() => partnerCostLedger(invalid), /cash retained/);
+});
+
+test("finance report reconciles repayment-adjusted shares while retaining actual expenses and cash", () => {
+  const f = fixture();
+  f.cmd("purchase", {
+    advance_id: f.a,
+    paid_on: "2020-01-02",
+    amount_cents: 2500000,
+    total_cents: 2500000,
+    category_id: "expense",
+    account: "cash",
+    notes: "Fictional report cost",
+  });
+  f.data.income.push({
+    id: "i",
+    business_date: "2020-01-02",
+    category_id: "income",
+    amount_cents: 1000001,
+    notes: "",
+  });
+  const r = buildFinanceReport(
+    {
+      finance: f.data,
+      roi: { capital: [], exclusions: [] },
+      balances: {
+        settings: f.cash.settings,
+        allocations: f.cash.allocations,
+        movements: f.cash.movements,
+      },
+      generated_at: "2020-02-01T00:00:00Z",
+      prepared_by: "Fictional sample",
+    },
+    {
+      start: "2020-01-01",
+      end: "2020-01-31",
+      asOf: "2020-02-01",
+      period: "monthly",
+    },
+  );
+  assert.equal(r.cash.net, -1499999);
+  assert.equal(r.distribution.payout_basis_cents, 1000001);
+  assert.equal(
+    Object.values(r.shares).reduce((a, b) => a + b, 0),
+    1000001,
+  );
+  assert.deepEqual(r.shares, { Genesis: 400000, Ken: 400000, Jeremy: 200001 });
+  assert.equal(
+    r.daily.reduce((n, d) => n + d.payoutBasis, 0),
+    r.distribution.payout_basis_cents,
+  );
+  assert.equal(r.balances?.balances.cash, 0);
+  assert.equal(r.expenses.length, 1);
+});
+
+test("frozen payout evidence compares values independently of PostgreSQL jsonb property order", () => {
+  const f = fixture();
+  const basis = distributionBasis(f.data, "2020-01-01", "2020-01-31");
+  const reordered = Object.fromEntries(
+    Object.entries(basis).reverse(),
+  ) as typeof basis;
+  assert.equal(
+    distributionEvidenceKey(basis),
+    distributionEvidenceKey(reordered),
+  );
+  assert.notEqual(
+    distributionEvidenceKey(basis),
+    distributionEvidenceKey({ ...basis, funded_purchases_cents: 1 }),
+  );
+});
+
+test("same-day repayments retain recorded order before using ID as a tie breaker", () => {
+  const f = fixture();
+  f.cmd("purchase", {
+    advance_id: f.a,
+    paid_on: "2020-01-02",
+    amount_cents: 10000,
+    total_cents: 10000,
+    category_id: "expense",
+    account: "cash",
+  });
+  const first = f.cmd(
+    "repay",
+    {
+      advance_id: f.a,
+      paid_on: "2020-01-03",
+      amount_cents: 10000,
+      account: "cash",
+    },
+    "ffffffff-ffff-4fff-8fff-fffffffffff1",
+  );
+  f.data.partner_cash!.repayments[0].created_at = "2020-01-03T01:00:00Z";
+  const second = f.cmd(
+    "repay",
+    {
+      advance_id: f.a,
+      paid_on: "2020-01-03",
+      amount_cents: 10000,
+      account: "cash",
+    },
+    "00000000-0000-4000-8000-000000000001",
+  );
+  const ledger = partnerCostLedger(f.data.partner_cash!);
+  assert.equal(
+    ledger.find((e) => e.id === first)?.reimbursed_cost_cents,
+    10000,
+  );
+  assert.equal(ledger.find((e) => e.id === second)?.unused_return_cents, 10000);
 });

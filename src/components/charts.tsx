@@ -26,27 +26,27 @@ export function CashFlowChart({
     bottom = 42;
   const max = Math.max(
     10000,
-    ...points.flatMap((p) => [p.income, p.expense, p.net]),
+    ...points.flatMap((p) => [p.income, p.expense, p.payoutBasis]),
   );
-  const min = Math.min(0, ...points.map((p) => p.net));
+  const min = Math.min(0, ...points.map((p) => p.payoutBasis));
   const y = (value: number) =>
     top + ((max - value) / (max - min)) * (height - top - bottom);
   const step = (width - left - right) / points.length;
   const labelStride = Math.ceil(56 / step);
   const zero = y(0);
   const barWidth = Math.min(17, step * 0.27);
-  const hasData = points.some((p) => p.income || p.expense);
+  const hasData = points.some((p) => p.income || p.expense || p.payoutBasis);
   const line = points
-    .map((p, i) => `${left + step * (i + 0.5)},${y(p.net)}`)
+    .map((p, i) => `${left + step * (i + 0.5)},${y(p.payoutBasis)}`)
     .join(" ");
   return (
     <div className="cash-chart" ref={container}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Income and expenses by period, with a net income trend line"
+        aria-label="Income and expenses by period, with a repayment-adjusted owner payout trend line"
       >
-        <title>Income, expenses and net income</title>
+        <title>Income, expenses and owner payout basis</title>
         {Array.from({ length: 5 }, (_, i) => {
           const amount = max - ((max - min) * i) / 4;
           return (

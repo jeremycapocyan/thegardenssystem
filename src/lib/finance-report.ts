@@ -1,3 +1,4 @@
+import { distributionBasis } from "./distribution";
 import type { Dataset, Period } from "./types";
 import type { RoiData } from "./roi";
 import { emptyPartnerCash, partnerCashSummary } from "./partner-cash";
@@ -143,12 +144,14 @@ export function buildFinanceReport(
   });
   const ownerMonths = months.map((month) => {
     const current = totals(data, month, monthEnd(month)),
+      distribution = distributionBasis(data, month, monthEnd(month)),
       statement = activeOwnerSettlement(data, month);
     return {
       month,
       ...current,
-      net: statement?.net_cents ?? current.net,
-      currentNet: current.net,
+      net: statement?.net_cents ?? distribution.payout_basis_cents,
+      distribution,
+      currentNet: distribution.payout_basis_cents,
       confirmed: !!statement,
       owners: settlements(data, month, asOf),
     };
@@ -159,7 +162,13 @@ export function buildFinanceReport(
       ownerPaid = payouts
         .filter((p) => p.paid_on === date)
         .reduce((n, p) => n + p.amount_cents, 0);
-    return { date, ...total, ownerPaid, retained: total.net - ownerPaid };
+    return {
+      date,
+      ...total,
+      payoutBasis: distributionBasis(data, date, date).payout_basis_cents,
+      ownerPaid,
+      retained: total.net - ownerPaid,
+    };
   });
   const warnings: string[] = [];
   for (const m of ownerMonths)
@@ -168,7 +177,7 @@ export function buildFinanceReport(
       (m.net !== m.currentNet || m.owners.some((o) => o.needsReview))
     )
       warnings.push(
-        `${m.month}: confirmed owner settlement uses frozen net ${m.net / 100}; current recorded net is ${m.currentNet / 100}. Admin review is required; saved capital deductions remain unchanged.`,
+        `${m.month}: confirmed owner settlement uses frozen payout basis ${m.net / 100}; current payout basis is ${m.currentNet / 100}. Admin review is required; saved capital deductions remain unchanged.`,
       );
   const unknown = new Set(
     [...income, ...expenses]
@@ -296,7 +305,8 @@ export function buildFinanceReport(
     cash,
     paidToOwners,
     retained: cash.net - paidToOwners,
-    shares: ownerShares(cash.net),
+    distribution: distributionBasis(data, start, end),
+    shares: ownerShares(distributionBasis(data, start, end).payout_basis_cents),
     income,
     expenses,
     payouts,

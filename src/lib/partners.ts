@@ -1,4 +1,5 @@
-import { monthStart, monthEnd, ownerShares, totals } from "./finance";
+import { distributionBasis, type DistributionBasis } from "./distribution";
+import { monthStart, monthEnd, ownerShares } from "./finance";
 import { OWNERS, type Dataset, type Owner } from "./types";
 import type {
   CapitalContribution,
@@ -75,6 +76,7 @@ export interface PartnerOwnerPreview {
 export interface PartnerPreview {
   month: string;
   net_cents: number;
+  distribution?: DistributionBasis;
   owners: PartnerOwnerPreview[];
   fingerprint: string;
   profit_hash: string;
@@ -171,6 +173,7 @@ export function partnerProfitKey(data: Dataset, month: string) {
         .filter((i) => i.business_date >= start && i.business_date <= end)
         .map((i) => [i.id, i.business_date, i.amount_cents])
         .sort(),
+      distributionBasis(data, start, end),
       data.expenses
         .filter((e) => e.paid_on >= start && e.paid_on <= end)
         .map((e) => [e.id, e.paid_on, e.amount_cents])
@@ -191,7 +194,8 @@ export function previewPartnerSettlement(
   )
     throw Error("Choose a current or past calendar month.");
   const p = data.partners || emptyPartners(),
-    net = totals(data, monthStart(month), monthEnd(month)).net,
+    distribution = distributionBasis(data, monthStart(month), monthEnd(month)),
+    net = distribution.payout_basis_cents,
     shares = ownerShares(net),
     blockers: string[] = [];
   const debtBalances = partnerDebtBalances(p, "2100-12-31")
@@ -255,6 +259,7 @@ export function previewPartnerSettlement(
   return {
     month,
     net_cents: net,
+    distribution,
     owners,
     profit_hash,
     fingerprint: sampleFingerprint(

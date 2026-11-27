@@ -324,7 +324,7 @@ export function RoiTracker() {
         <Metric
           label="Cash return toward recovery"
           value={money(report.returned)}
-          note="Cash net income plus marked capital purchases"
+          note="Recorded operating result plus marked capital purchases"
         />
         <Metric
           label="Business cash ROI"

@@ -282,7 +282,7 @@ test("finance PDF shows both debt directions, frozen shares and separate capital
   assert.equal(report.partnerCapitalOut, 11200000);
   assert.equal(report.afterCapitalAdvances, 500000 - 11200000);
   assert.equal(report.roi.invested, 0);
-  assert(report.warnings.some((w) => w.includes("frozen net")));
+  assert(report.warnings.some((w) => w.includes("frozen payout basis")));
   const bytes = await createFinanceReportPdf(
       report,
       await loadTimesheetPdfAssets(),

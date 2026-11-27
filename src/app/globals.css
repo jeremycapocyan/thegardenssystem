@@ -3304,3 +3304,23 @@ td > strong {
     gap: 12px;
   }
 }
+
+/* Operating results and owner distributions are deliberately separate. */
+.payout-reconciliation { padding: 1.5rem; }
+.payout-reconciliation h2 { margin-bottom: 1rem; font-size: 1.15rem; }
+.payout-reconciliation > p { margin-top: 1rem; line-height: 1.6; }
+.payout-reconciliation .payment-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2rem; padding: 0; }
+.payout-reconciliation .payment-breakdown > div,
+.partner-review-body .payment-breakdown > div { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.partner-review-body { padding: 1.25rem; }
+.partner-review-body > * + * { margin-top: 1rem; }
+.partner-review-body p { line-height: 1.6; }
+.partner-review-body .panel { padding: 1rem; }
+.partner-review-body .payment-breakdown { display: grid; grid-template-columns: 1fr; gap: 0.75rem; padding: 0; }
+.partner-review-body .payment-breakdown dt,
+.payout-reconciliation .payment-breakdown dt { font-size: 0.875rem; }
+.partner-review-body .payment-breakdown dd,
+.payout-reconciliation .payment-breakdown dd { font-size: 1rem; white-space: nowrap; }
+.partner-review-body .dialog-actions { display: flex; justify-content: flex-end; gap: 0.75rem; }
+.partner-review-body .button { min-height: 2.75rem; }
+@media (max-width: 640px) { .payout-reconciliation .payment-breakdown { grid-template-columns: 1fr; } }

@@ -1,3 +1,4 @@
+import { distributionBasis, distributionEvidenceKey } from "./distribution";
 import type {
   BillTerm,
   Dataset,
@@ -149,7 +150,13 @@ export function trend(data: Dataset, period: Period, reference: string) {
         ? { day: undefined, month: "short", year: "2-digit" }
         : { year: undefined },
     );
-    return { start, end, label, ...totals(data, start, end) };
+    return {
+      start,
+      end,
+      label,
+      ...totals(data, start, end),
+      payoutBasis: distributionBasis(data, start, end).payout_basis_cents,
+    };
   });
 }
 export function billTerm(
@@ -261,8 +268,8 @@ export function installmentSummary(
   };
 }
 export function settlements(data: Dataset, month: string, asOf: string) {
-  const result = totals(data, monthStart(month), monthEnd(month));
-  const shares = ownerShares(result.net);
+  const basis = distributionBasis(data, monthStart(month), monthEnd(month));
+  const shares = ownerShares(basis.payout_basis_cents);
   return (["Genesis", "Ken", "Jeremy"] as const).map((owner) => {
     const statement = data.partners?.settlements.find(
       (s) => s.month === monthStart(month) && !s.reversed_at,
@@ -271,7 +278,11 @@ export function settlements(data: Dataset, month: string, asOf: string) {
     const entitlement = frozen?.entitlement ?? shares[owner];
     const needsReview =
       !!statement &&
-      (!!statement.needs_review || statement.net_cents !== result.net);
+      (!!statement.needs_review ||
+        statement.net_cents !== basis.payout_basis_cents ||
+        (!!statement.snapshot.distribution &&
+          distributionEvidenceKey(statement.snapshot.distribution) !==
+            distributionEvidenceKey(basis)));
     const withheld =
       statement && monthEnd(month) <= asOf ? frozen?.withheld || 0 : 0;
     const paid = data.payouts

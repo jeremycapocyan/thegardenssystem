@@ -301,7 +301,8 @@ export function FinanceReportDialog({ onClose }: { onClose: () => void }) {
                 Expenses <b>{money(ready.report.cash.expense)}</b>
               </span>
               <span>
-                Net income <b>{money(ready.report.cash.net)}</b>
+                Income available for payouts{" "}
+                <b>{money(ready.report.distribution.payout_basis_cents)}</b>
               </span>
             </div>
             <div className="finance-report-links">

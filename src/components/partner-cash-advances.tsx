@@ -1,5 +1,11 @@
 "use client";
 import {
+  distributionBasis,
+  partnerCostLedger,
+  type PartnerCashImpact,
+} from "@/lib/distribution";
+import { PartnerCashReview } from "./partner-cash-review";
+import {
   useEffect,
   useRef,
   useState,
@@ -33,7 +39,7 @@ import {
 const STORE = "gardens.balances.sample.v1";
 const titles: Record<PartnerCashAction, string> = {
   receive: "Receive partner advance",
-  purchase: "Link an expense (optional)",
+  purchase: "Link funded expense",
   repay: "Record repayment",
   edit_receipt: "Edit advance",
   edit_repayment: "Edit repayment",
@@ -108,6 +114,12 @@ export function PartnerCashAdvances() {
     [notice, setNotice] = useState(""),
     [loading, setLoading] = useState(false),
     [showClosed, setShowClosed] = useState(false);
+  const [review, setReview] = useState<{
+    impact: PartnerCashImpact;
+    confirm: () => Promise<void>;
+    cancel: () => void;
+  } | null>(null);
+  const costLedger = partnerCostLedger(p);
   const visible = p.advances.filter(
     (a) =>
       showClosed ||
@@ -151,7 +163,7 @@ export function PartnerCashAdvances() {
     a.click();
     URL.revokeObjectURL(url);
   }
-  const save: PartnerCashSave = async (action, id, payload, cash) => {
+  const post: PartnerCashSave = async (action, id, payload, cash) => {
     if (!admin) throw Error("Finance management permission required.");
     if (ws.mode === "demo") {
       const next = applyPartnerCashDemo(
@@ -178,6 +190,63 @@ export function PartnerCashAdvances() {
       );
       if (result.error) throw Error(friendlyError(result.error));
     }
+  };
+  const save: PartnerCashSave = async (action, id, payload, cash) => {
+    let impact: PartnerCashImpact;
+    if (ws.mode === "demo") {
+      const simulation = applyPartnerCashDemo(
+        ws.data,
+        cash,
+        action,
+        id,
+        payload,
+        todayInManila(),
+      );
+      impact = {
+        fingerprint: "sample",
+        before: distributionBasis(ws.data, "2000-01-01", "2100-12-31"),
+        after: distributionBasis(simulation.data, "2000-01-01", "2100-12-31"),
+        repayment: null,
+      };
+      impact.repayment =
+        impact.after.events.find(
+          (e) =>
+            e.kind === "repayment" &&
+            e.id === (action === "edit_repayment" ? payload.record_id : id),
+        ) || null;
+    } else {
+      const result = await getBackend()!.rpc("garden_partner_cash_preview", {
+        p_action: action,
+        p_id: id,
+        p_payload: payload,
+      });
+      if (result.error) throw Error(friendlyError(result.error));
+      impact = result.data as PartnerCashImpact;
+    }
+    await new Promise<void>((resolve, reject) =>
+      setReview({
+        impact,
+        cancel: () => {
+          setReview(null);
+          reject(Error("Review canceled. No changes saved."));
+        },
+        confirm: async () => {
+          await post(
+            action,
+            id,
+            {
+              ...payload,
+              ...(ws.mode === "live"
+                ? { distribution_expected: impact.fingerprint }
+                : {}),
+            },
+            cash,
+          );
+          setReview(null);
+          resolve();
+        },
+      }),
+    );
   };
   async function saved() {
     const action = form?.action;
@@ -331,16 +400,13 @@ export function PartnerCashAdvances() {
                         >
                           Remove
                         </button>
-                        <details className="partner-cash-more">
-                          <summary>More options</summary>
-                          <button
-                            className="text-button"
-                            disabled={loading}
-                            onClick={() => void open("purchase", a.id)}
-                          >
-                            Link an existing expense (optional)
-                          </button>
-                        </details>
+                        <button
+                          className="text-button"
+                          disabled={loading}
+                          onClick={() => void open("purchase", a.id)}
+                        >
+                          Link funded expense
+                        </button>
                       </div>
                     )}
                   </td>
@@ -359,7 +425,7 @@ export function PartnerCashAdvances() {
         </table>
       </div>
       <details className="cash-advance-history">
-        <summary>Repayment history and optional expense links</summary>
+        <summary>Repayment history and funded expenses</summary>
         <div className="table-scroll">
           <table className="data-table">
             <thead>
@@ -419,7 +485,23 @@ export function PartnerCashAdvances() {
                     {p.advances.find((a) => a.id === r.advance_id)?.purpose}
                   </td>
                   <td>{displayDate(r.paid_on)}</td>
-                  <td>{money(r.amount_cents)}</td>
+                  <td>
+                    {money(r.amount_cents)}
+                    {!r.voided_at && (
+                      <small>
+                        Cost reimbursed:{" "}
+                        {money(
+                          costLedger.find((e) => e.id === r.id)
+                            ?.reimbursed_cost_cents || 0,
+                        )}{" "}
+                        · unused returned:{" "}
+                        {money(
+                          costLedger.find((e) => e.id === r.id)
+                            ?.unused_return_cents || 0,
+                        )}
+                      </small>
+                    )}
+                  </td>
                   <td>
                     {r.detail.from_account && ACCOUNTS[r.detail.from_account]}
                     <small>{r.detail.reference}</small>
@@ -466,9 +548,12 @@ export function PartnerCashAdvances() {
       </details>
       <p className="partner-help">
         The amount owed changes only when you repay the partner. A purchase is
-        recorded once in Expenses. Repayments are not additional expenses and do
-        not change capital or profit shares.
+        recorded once in Expenses. Link its funded portion to defer the
+        owner-payout deduction until Gardens reimburses that cost. Repayments
+        create no additional expense; unused cash returned has no payout
+        deduction.
       </p>
+
       {form &&
         (form.action.startsWith("edit_") ? (
           <PartnerCashEditForm
@@ -487,6 +572,13 @@ export function PartnerCashAdvances() {
             onSaved={saved}
           />
         ))}
+      {review && (
+        <PartnerCashReview
+          impact={review.impact}
+          onConfirm={review.confirm}
+          onCancel={review.cancel}
+        />
+      )}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { distributionBasis, distributionCsvRows } from "@/lib/distribution";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -580,7 +581,8 @@ export function FinanceApp({ view }: { view: View }) {
   const month = monthStart(reference);
   const admin = canManage(ws.profile, "finance");
   const summary = totals(ws.data, range.start, range.end);
-  const shares = ownerShares(summary.net);
+  const distribution = distributionBasis(ws.data, range.start, range.end);
+  const shares = ownerShares(distribution.payout_basis_cents);
   const categoryName = (id: string) =>
     ws.data.categories.find((c) => c.id === id)?.name || "Unknown category";
   const matches = (...values: unknown[]) =>
@@ -870,7 +872,8 @@ export function FinanceApp({ view }: { view: View }) {
           "Period end",
           "Income (PHP)",
           "Expenses (PHP)",
-          "Net income (PHP)",
+          "Recorded operating result (PHP)",
+          "Income available for payouts (PHP)",
           "Genesis (PHP)",
           "Ken (PHP)",
           "Jeremy (PHP)",
@@ -881,11 +884,21 @@ export function FinanceApp({ view }: { view: View }) {
           summary.income / 100,
           summary.expense / 100,
           summary.net / 100,
+          distribution.payout_basis_cents / 100,
           shares.Genesis / 100,
           shares.Ken / 100,
           shares.Jeremy / 100,
         ],
       ];
+    if (view === "dashboard" || view === "payouts")
+      rows.push(
+        [],
+        ...distributionCsvRows(
+          view === "payouts"
+            ? distributionBasis(ws.data, month, monthEnd(month))
+            : distribution,
+        ),
+      );
     if (view === "installments" || view === "dashboard")
       rows.push(
         [],
@@ -1189,13 +1202,9 @@ export function FinanceApp({ view }: { view: View }) {
                   icon={ArrowUpRight}
                 />
                 <Stat
-                  label="Net income"
-                  value={summary.net}
-                  note={
-                    summary.income
-                      ? `${((summary.net / summary.income) * 100).toFixed(1)}% of income remains`
-                      : "Income less actual business payments"
-                  }
+                  label="Income available for payouts"
+                  value={distribution.payout_basis_cents}
+                  note="Owner share basis after partner-funded cost adjustments"
                   icon={Wallet}
                   accent
                 />
@@ -1217,11 +1226,43 @@ export function FinanceApp({ view }: { view: View }) {
                   <dd>{money(summary.installment)}</dd>
                 </div>
               </dl>
+              <section
+                className="panel payout-reconciliation"
+                aria-label="Payout basis reconciliation"
+              >
+                <h2>How the payout amount is calculated</h2>
+                <dl className="payment-breakdown">
+                  <div>
+                    <dt>Recorded operating result</dt>
+                    <dd>{money(distribution.operating_result_cents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Add partner-funded purchases</dt>
+                    <dd>{money(distribution.funded_purchases_cents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Less costs repaid to partners</dt>
+                    <dd>{money(distribution.reimbursed_cost_cents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Income available for payouts</dt>
+                    <dd>{money(distribution.payout_basis_cents)}</dd>
+                  </div>
+                </dl>
+                <p>
+                  Operating result is income less recorded expenses. Linked
+                  partner-funded costs reduce owner shares as Gardens repays the
+                  partner. Cash balances still follow actual supplier and
+                  partner payments. Unused advance returned:{" "}
+                  {money(distribution.unused_return_cents)}; no payout
+                  deduction.
+                </p>
+              </section>
               <div className="analytics-grid">
                 <section className="panel cash-panel">
                   <div className="panel-heading">
                     <div>
-                      <h2>Cash flow</h2>
+                      <h2>Income, expenses & payout basis</h2>
                       <p>
                         {period === "daily"
                           ? "The latest 30 days"
@@ -1241,7 +1282,7 @@ export function FinanceApp({ view }: { view: View }) {
                       </span>
                       <span>
                         <i className="net-dot" />
-                        Net
+                        Payout basis
                       </span>
                     </div>
                   </div>
@@ -1257,9 +1298,10 @@ export function FinanceApp({ view }: { view: View }) {
                   <ExpenseMix entries={spending} />
                 </section>
               </div>
-              {summary.net < 0 && (
+              {distribution.payout_basis_cents < 0 && (
                 <p className="loss-note">
-                  Loss this period: <strong>{money(-summary.net)}</strong>.
+                  Negative payout basis this period:{" "}
+                  <strong>{money(-distribution.payout_basis_cents)}</strong>.
                   Distributable income is ₱0.00; owner shares are zero. This
                   loss does not carry forward.
                 </p>
@@ -1720,8 +1762,8 @@ export function FinanceApp({ view }: { view: View }) {
                 <div>
                   <h2>{displayMonth(month)} settlement</h2>
                   <p>
-                    Shares use the entire calendar month’s net income. Payouts
-                    are separate from business expenses.
+                    Shares use the entire calendar month’s repayment-adjusted
+                    payout basis. Payouts are separate from business expenses.
                   </p>
                 </div>
                 <label className="as-of">
@@ -1999,8 +2041,9 @@ export function FinanceApp({ view }: { view: View }) {
                   <div>
                     <strong>Actual payments</strong>
                     <p>
-                      Net income is cash collected less actual business
-                      payments. Owner withdrawals are separate.
+                      Recorded operating result is income less actual business
+                      payments. Owner shares use the separate repayment-adjusted
+                      payout basis. Owner withdrawals are separate.
                     </p>
                   </div>
                   <div>

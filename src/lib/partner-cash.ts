@@ -1,3 +1,4 @@
+import { partnerCostLedger } from "./distribution";
 import { toDate } from "./finance";
 import { OWNERS, type Owner, type Dataset } from "./types";
 import type { CashAccount, CashMovement, CashAllocation } from "./balances";
@@ -263,12 +264,15 @@ export function partnerCashCsvRows(
       "Partner",
       "Date",
       "Amount",
+      "Reimbursed cost PHP",
+      "Unused advance returned PHP",
       "Account",
       "Reference",
       "Status",
       "Correction reason",
     ],
   );
+  const ledger = partnerCostLedger(p);
   for (const r of p.repayments) {
     if (r.paid_on > asOf) continue;
     rows.push([
@@ -276,6 +280,8 @@ export function partnerCashCsvRows(
       p.advances.find((a) => a.id === r.advance_id)?.owner || "",
       r.paid_on,
       r.amount_cents / 100,
+      (ledger.find((e) => e.id === r.id)?.reimbursed_cost_cents || 0) / 100,
+      (ledger.find((e) => e.id === r.id)?.unused_return_cents || 0) / 100,
       r.detail.from_account || "",
       r.detail.reference,
       r.voided_at ? "Voided" : "Active",
